@@ -503,7 +503,8 @@ protected:
     }
 
     //! Change Participant enabled status
-    void enabled_(bool status)
+    void enabled_(
+            bool status)
     {
         enabled_status_.store(status);
     }
