@@ -19,6 +19,9 @@
 #ifndef _FASTDDS_TOPIC_DDSSQLFILTER_DDSFILTERVALUE_HPP_
 #define _FASTDDS_TOPIC_DDSSQLFILTER_DDSFILTERVALUE_HPP_
 
+#include <memory>
+#include <regex>
+
 #include <fastrtps/utils/fixed_size_string.hpp>
 
 namespace eprosima {
@@ -26,11 +29,15 @@ namespace fastdds {
 namespace dds {
 namespace DDSSQLFilter {
 
+struct DDSFilterPredicate;
+
 /**
  * Represents a value (either constant, parameter or fieldname) on a filter expression.
  */
 struct DDSFilterValue
 {
+    friend struct DDSFilterPredicate;
+
     /**
      * The high-level kind of a DDSFilterValue.
      */
@@ -81,7 +88,17 @@ struct DDSFilterValue
     {
     }
 
+    // *INDENT-OFF*
+    DDSFilterValue(const DDSFilterValue&) = delete;
+    DDSFilterValue& operator=(const DDSFilterValue&) = delete;
+    DDSFilterValue(DDSFilterValue&&) = default;
+    DDSFilterValue& operator=(DDSFilterValue&&) = default;
+    // *INDENT-ON*
+
     virtual ~DDSFilterValue() = default;
+
+    void copy_from(
+            const DDSFilterValue& other) noexcept;
 
     /**
      * This method is used by a DDSFilterPredicate to check if this DDSFilterValue can be used.
@@ -102,6 +119,72 @@ struct DDSFilterValue
     virtual void reset() noexcept
     {
     }
+
+    void as_regular_expression(
+            bool is_like_operand);
+
+    inline bool operator ==(
+            const DDSFilterValue& other) const noexcept
+    {
+        return compare(*this, other) == 0;
+    }
+
+    inline bool operator !=(
+            const DDSFilterValue& other) const noexcept
+    {
+        return compare(*this, other) != 0;
+    }
+
+    inline bool operator <(
+            const DDSFilterValue& other) const noexcept
+    {
+        return compare(*this, other) < 0;
+    }
+
+    inline bool operator <=(
+            const DDSFilterValue& other) const noexcept
+    {
+        return compare(*this, other) <= 0;
+    }
+
+    inline bool operator >(
+            const DDSFilterValue& other) const noexcept
+    {
+        return compare(*this, other) > 0;
+    }
+
+    inline bool operator >=(
+            const DDSFilterValue& other) const noexcept
+    {
+        return compare(*this, other) >= 0;
+    }
+
+    bool is_like(
+            const DDSFilterValue& other) const noexcept;
+
+protected:
+
+    virtual void add_parent(
+            DDSFilterPredicate* parent)
+    {
+        static_cast<void>(parent);
+    }
+
+    void value_has_changed();
+
+private:
+
+    enum class RegExpKind
+    {
+        NONE, LIKE, MATCH
+    };
+
+    RegExpKind regular_expr_kind_ = RegExpKind::NONE;
+    std::unique_ptr<std::regex> regular_expr_;
+
+    static int64_t compare(
+            const DDSFilterValue& lhs,
+            const DDSFilterValue& rhs) noexcept;
 
 };
 
