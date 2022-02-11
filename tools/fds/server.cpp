@@ -268,6 +268,7 @@ int main (
                 });
 
         cout << endl << "### Server shut down ###" << endl;
+        DomainParticipantFactory::get_instance()->delete_participant(pServer);
     }
 
     fastdds::dds::Log::Flush();
