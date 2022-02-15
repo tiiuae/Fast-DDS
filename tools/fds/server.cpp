@@ -30,6 +30,10 @@
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
 #include <fastdds/dds/log/Log.hpp>
 
+#include <fastrtps/xmlparser/XMLProfileManager.h>
+#include <fastrtps/Domain.h>
+
+
 using namespace eprosima::fastdds::dds;
 using namespace eprosima;
 using namespace fastrtps;
@@ -59,6 +63,7 @@ int main (
     vector<option::Option> options(stats.options_max);
     vector<option::Option> buffer(stats.buffer_max);
     option::Parser parse(usage, argc, argv, &options[0], &buffer[0]);
+    std::string sXMLConfigFile = "", delimiter = "@", profile = "";
 
     // check the command line options
     if (parse.error())
@@ -95,15 +100,52 @@ int main (
 
     DomainParticipantQos participantQos;
 
+    if ( nullptr != options[XML_FILE])
+    {
+        sXMLConfigFile = options[XML_FILE].arg;
+        if (sXMLConfigFile.length() > 0)
+        {
+            if (sXMLConfigFile.find(delimiter) != std::string::npos)
+            {
+                profile = sXMLConfigFile.substr(sXMLConfigFile.find(delimiter) + 1, sXMLConfigFile.length());
+                sXMLConfigFile = sXMLConfigFile.substr(0, sXMLConfigFile.find(delimiter));
+            }
+
+            // if (xmlparser::XMLP_ret::XML_OK != xmlparser::XMLProfileManager::loadXMLFile(sXMLConfigFile))
+            if (true != eprosima::fastrtps::Domain::loadXMLProfilesFile(sXMLConfigFile))
+            {
+                std::cout << "Cannot open XML file " << sXMLConfigFile << ". Please, check the path of this "
+                          << "XML file." << std::endl;
+                return 1;
+            }
+            DomainParticipantFactory::get_instance()->load_profiles();
+            if (profile.empty())
+            {
+                participantQos = DomainParticipantFactory::get_instance()->get_default_participant_qos();
+            }
+            else
+            {
+                DomainParticipantFactory::get_instance()->get_participant_qos_from_profile(profile, participantQos);
+            }
+        }
+
+    }
+
     // Retrieve server Id: is mandatory and only specified once
     // Note there is a specific cast to pointer if the Option is valid
     option::Option* pOp = options[SERVERID];
     int server_id;
+    fastrtps::rtps::GuidPrefix_t prefix_cero;
 
-    if ( nullptr == pOp )
+    if ( nullptr == pOp)
     {
-        cout << "Specify server id is mandatory: use -i or --server-id option." << endl;
-        return 1;
+        if (participantQos.wire_protocol().builtin.discovery_config.discoveryProtocol !=
+                eprosima::fastrtps::rtps::DiscoveryProtocol::SERVER ||
+                participantQos.wire_protocol().prefix == prefix_cero)
+        {
+            cout << "Specify server id is mandatory: use -i or --server-id option." << endl;
+            return 1;
+        }
     }
     else if ( pOp->count() != 1)
     {
@@ -113,12 +155,14 @@ int main (
     else
     {
         stringstream is;
+
         is << pOp->arg;
 
         // validation have been already done
         // Name the server according with the identifier
         if ( !( is >> server_id
-                && eprosima::fastdds::rtps::get_server_client_default_guidPrefix(server_id, participantQos.wire_protocol().prefix)))
+                && eprosima::fastdds::rtps::get_server_client_default_guidPrefix(server_id,
+                participantQos.wire_protocol().prefix)))
         {
             cout << "The provided server identifier is not valid" << endl;
             return 1;
@@ -163,10 +207,10 @@ int main (
 
     // retrieve first IP address
     pOp = options[IPADDRESS];
-    if ( nullptr == pOp )
+    if ( nullptr == pOp && nullptr == options[XML_FILE])
     {
         // add default locator
-       participantQos.wire_protocol().builtin.metatrafficUnicastLocatorList.push_back(locator);
+        participantQos.wire_protocol().builtin.metatrafficUnicastLocatorList.push_back(locator);
     }
     else
     {
@@ -245,7 +289,8 @@ int main (
 
         // Print running server attributes
         cout << "### Server is running ###" << endl;
-        cout << "  Participant Type:   " << participantQos.wire_protocol().builtin.discovery_config.discoveryProtocol << endl;
+        cout << "  Participant Type:   " << participantQos.wire_protocol().builtin.discovery_config.discoveryProtocol <<
+            endl;
         cout << "  Server ID:          " << server_id << endl;
         cout << "  Server GUID prefix: " << pServer->guid().guidPrefix << endl;
         cout << "  Server Addresses:   ";
@@ -349,6 +394,34 @@ option::ArgStatus Arg::check_udp_port(
     {
         cout << "Option '" << option.name
              << "' value should be an UDP port between 1025 and 65535." << endl;
+    }
+
+    return option::ARG_ILLEGAL;
+}
+
+/*static*/
+option::ArgStatus Arg::check_xml_file(
+        const option::Option& option,
+        bool msg)
+{
+    // the argument is required
+    if ( nullptr != option.arg )
+    {
+
+        // if (xmlparser::XMLP_ret::XML_OK !=
+        //     xmlparser::XMLProfileManager::loadXMLFile(option.arg))
+        // {
+        //     std::cout << "Cannot open XML file " << option.arg << ". Please, check the path of this "
+        //             << "XML file." << std::endl;
+        //     return option::ARG_ILLEGAL;
+        // }
+        return option::ARG_OK;
+
+    }
+
+    if (msg)
+    {
+        cout << "Option -" << option.name << " The path of the XML file is necesary" << endl;
     }
 
     return option::ARG_ILLEGAL;
