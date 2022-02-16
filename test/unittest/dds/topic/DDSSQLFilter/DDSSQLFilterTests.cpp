@@ -1538,11 +1538,11 @@ static std::vector<DDSSQLFilterValueParams> get_test_filtered_value_enum_inputs(
 
     std::vector<DDSSQLFilterValueParams> inputs;
     add_test_filtered_value_inputs("plain_field", field_name, values, inputs);
-    add_test_filtered_value_inputs("in_struct", "struct_field." + field_name, values, inputs);
-    add_test_filtered_value_inputs("array", "array_" + field_name + "[0]", values, inputs);
-    add_test_filtered_value_inputs("bounded_sequence", bounded_seq_name + "[0]", values, inputs);
+    add_test_filtered_value_inputs("DISABLED_in_struct", "struct_field." + field_name, values, inputs);
+    add_test_filtered_value_inputs("DISABLED_array", "array_" + field_name + "[0]", values, inputs);
+    add_test_filtered_value_inputs("DISABLED_bounded_sequence", bounded_seq_name + "[0]", values, inputs);
     add_negative_test_filtered_value_inputs("neg_bounded_sequence", bounded_seq_name + "[2]", values, inputs);
-    add_test_filtered_value_inputs("unbounded_sequence", unbounded_seq_name + "[0]", values, inputs);
+    add_test_filtered_value_inputs("DISABLED_unbounded_sequence", unbounded_seq_name + "[0]", values, inputs);
     add_negative_test_filtered_value_inputs("neg_unbounded_sequence", unbounded_seq_name + "[2]", values, inputs);
     return inputs;
 }
@@ -1564,11 +1564,11 @@ static std::vector<DDSSQLFilterValueParams> get_test_filtered_value_enum2_inputs
 
     std::vector<DDSSQLFilterValueParams> inputs;
     add_test_filtered_value_inputs("plain_field", field_name, values, inputs);
-    add_test_filtered_value_inputs("in_struct", "struct_field." + field_name, values, inputs);
-    add_test_filtered_value_inputs("array", "array_" + field_name + "[0]", values, inputs);
-    add_test_filtered_value_inputs("bounded_sequence", bounded_seq_name + "[0]", values, inputs);
+    add_test_filtered_value_inputs("DISABLED_in_struct", "struct_field." + field_name, values, inputs);
+    add_test_filtered_value_inputs("DISABLED_array", "array_" + field_name + "[0]", values, inputs);
+    add_test_filtered_value_inputs("DISABLED_bounded_sequence", bounded_seq_name + "[0]", values, inputs);
     add_negative_test_filtered_value_inputs("neg_bounded_sequence", bounded_seq_name + "[2]", values, inputs);
-    add_test_filtered_value_inputs("unbounded_sequence", unbounded_seq_name + "[0]", values, inputs);
+    add_test_filtered_value_inputs("DISABLED_unbounded_sequence", unbounded_seq_name + "[0]", values, inputs);
     add_negative_test_filtered_value_inputs("neg_unbounded_sequence", unbounded_seq_name + "[2]", values, inputs);
     return inputs;
 }
