@@ -56,7 +56,7 @@ struct boolean_value : sor<false_value, true_value> {};
 struct integer_value : seq< opt< sign >, integer > {};
 struct fractional : seq< dot_op, integer > {};
 struct exponent : seq< one< 'e', 'E' >, integer_value > {};
-struct float_value : seq< integer_value, opt< fractional >, opt< exponent > > {};
+struct float_value : seq < opt< sign >, integer, sor < exponent, seq< fractional, opt< exponent > > > > {};
 
 // PARAMETER
 struct parameter_value : seq< one< '%' >, digit, opt< digit > > {};
@@ -77,7 +77,7 @@ struct le_op : pad< TAO_PEGTL_KEYWORD("<="), space> {};
 struct ne_op : pad< sor< TAO_PEGTL_KEYWORD("<>"), TAO_PEGTL_KEYWORD("!=") >, space> {};
 struct like_op : pad< sor< TAO_PEGTL_KEYWORD("LIKE"), TAO_PEGTL_KEYWORD("like") >, space> {};
 struct match_op : pad< sor< TAO_PEGTL_KEYWORD("MATCH"), TAO_PEGTL_KEYWORD("match") >, space> {};
-struct rel_op : sor< like_op, ne_op, le_op, ge_op, lt_op, gt_op, eq_op > {};
+struct rel_op : sor< match_op, like_op, ne_op, le_op, ge_op, lt_op, gt_op, eq_op > {};
 
 // Parameter, Range
 struct Literal : sor< boolean_value, float_value, integer_value, char_value, string_value > {};

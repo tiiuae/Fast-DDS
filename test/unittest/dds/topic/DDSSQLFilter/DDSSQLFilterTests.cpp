@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <array>
+#include <limits>
 #include <map>
 #include <set>
 #include <string>
@@ -26,6 +28,7 @@
 #include "fastdds/dds/core/StackAllocatedSequence.hpp"
 #include "fastdds/dds/log/Log.hpp"
 
+#include "data_types/ContentFilterTestType.h"
 #include "data_types/ContentFilterTestTypePubSubTypes.h"
 #include "data_types/ContentFilterTestTypeTypeObject.h"
 
@@ -76,6 +79,25 @@ static bool are_types_compatible(
 using DDSFilterFactory = DDSSQLFilter::DDSFilterFactory;
 using ReturnCode_t = DDSFilterFactory::ReturnCode_t;
 
+static ReturnCode_t create_content_filter(
+        DDSFilterFactory& factory,
+        const std::string& expression,
+        const std::vector<std::string>& parameters,
+        const ContentFilterTestTypePubSubType* type,
+        IContentFilter*& filter_instance)
+{
+    StackAllocatedSequence<const char*, 10> params;
+    LoanableCollection::size_type n_params = static_cast<LoanableCollection::size_type>(parameters.size());
+    params.length(n_params);
+    for (LoanableCollection::size_type n = 0; n < n_params; ++n)
+    {
+        params[n] = parameters[n].c_str();
+    }
+
+    return factory.create_content_filter("DDSSQL", "ContentFilterTestType", type,
+                   expression.c_str(), params, filter_instance);
+}
+
 class DDSSQLFilterTests : public testing::Test
 {
     DDSFilterFactory uut;
@@ -97,17 +119,7 @@ protected:
             const TestCase& test)
     {
         IContentFilter* filter_instance = nullptr;
-
-        StackAllocatedSequence<const char*, 10> params;
-        LoanableCollection::size_type n_params = static_cast<LoanableCollection::size_type>(test.parameters.size());
-        params.length(n_params);
-        for (LoanableCollection::size_type n = 0; n < n_params; ++n)
-        {
-            params[n] = test.parameters[n].c_str();
-        }
-
-        auto ret = uut.create_content_filter("DDSSQL", "ContentFilterTestType", &type_support,
-                        test.expression.c_str(), params, filter_instance);
+        auto ret = create_content_filter(uut, test.expression, test.parameters, &type_support, filter_instance);
         EXPECT_EQ(ret, test.result)
             << " failed for expression \"" << test.expression << "\" [" << test.parameters.size() << "]";
         if (ret == ok_code)
@@ -410,6 +422,1246 @@ TEST_F(DDSSQLFilterTests, type_compatibility_compare)
         run(test_cases);
     }
 }
+
+/**
+ * Singleton that holds the serialized payloads to be evaluated
+ */
+struct DDSSQLFilterValueGlobalData
+{
+    static const std::vector<std::unique_ptr<IContentFilter::SerializedPayload>>& values()
+    {
+        static DDSSQLFilterValueGlobalData the_instance;
+        return the_instance.values_;
+    }
+
+    static const std::array<std::array<std::array<bool, 5>, 5>, 6>& results()
+    {
+        static std::array<std::array<std::array<bool, 5>, 5>, 6> the_results;
+        static bool generated = false;
+
+        if (!generated)
+        {
+            generated = true;
+
+            // EQ
+            the_results[0][0] = {true, false, false, false, false};
+            the_results[0][1] = {false, true, false, false, false};
+            the_results[0][2] = {false, false, true, false, false};
+            the_results[0][3] = {false, false, false, true, false};
+            the_results[0][4] = {false, false, false, false, true};
+            // NE
+            the_results[1][0] = {false, true, true, true, true};
+            the_results[1][1] = {true, false, true, true, true};
+            the_results[1][2] = {true, true, false, true, true};
+            the_results[1][3] = {true, true, true, false, true};
+            the_results[1][4] = {true, true, true, true, false};
+            // LT
+            the_results[2][0] = {false, false, false, false, false};
+            the_results[2][1] = {true, false, false, false, false};
+            the_results[2][2] = {true, true, false, false, false};
+            the_results[2][3] = {true, true, true, false, false};
+            the_results[2][4] = {true, true, true, true, false};
+            // LE
+            the_results[3][0] = {true, false, false, false, false};
+            the_results[3][1] = {true, true, false, false, false};
+            the_results[3][2] = {true, true, true, false, false};
+            the_results[3][3] = {true, true, true, true, false};
+            the_results[3][4] = {true, true, true, true, true};
+            // GT
+            the_results[4][0] = {false, true, true, true, true};
+            the_results[4][1] = {false, false, true, true, true};
+            the_results[4][2] = {false, false, false, true, true};
+            the_results[4][3] = {false, false, false, false, true};
+            the_results[4][4] = {false, false, false, false, false};
+            // GE
+            the_results[5][0] = {true, true, true, true, true};
+            the_results[5][1] = {false, true, true, true, true};
+            the_results[5][2] = {false, false, true, true, true};
+            the_results[5][3] = {false, false, false, true, true};
+            the_results[5][4] = {false, false, false, false, true};
+        }
+
+        return the_results;
+    }
+
+    static const std::array<std::pair<std::string, std::string>, 6>& ops()
+    {
+        static const std::array < std::pair<std::string, std::string>, 6 > the_ops =
+        {
+            std::pair<std::string, std::string>{"=",  "eq"},
+            std::pair<std::string, std::string>{"<>", "ne"},
+            std::pair<std::string, std::string>{"<",  "lt"},
+            std::pair<std::string, std::string>{"<=", "le"},
+            std::pair<std::string, std::string>{">",  "gt"},
+            std::pair<std::string, std::string>{">=", "ge"}
+        };
+
+        return the_ops;
+    }
+
+private:
+
+    std::vector<std::unique_ptr<IContentFilter::SerializedPayload>> values_;
+
+    DDSSQLFilterValueGlobalData()
+    {
+        std::array<ContentFilterTestType, 5> data;
+
+        add_char_values(data);
+        add_uint8_values(data);
+        add_int16_values(data);
+        add_uint16_values(data);
+        add_int32_values(data);
+        add_uint32_values(data);
+        add_int64_values(data);
+        add_uint64_values(data);
+        add_float_values(data);
+        add_double_values(data);
+        add_long_double_values(data);
+        add_bool_values(data);
+        add_string_values(data);
+        add_enum_values(data);
+        add_enum2_values(data);
+
+        for (size_t i = 0; i < data.size(); ++i)
+        {
+            add_value(data[i]);
+        }
+    }
+
+    void add_value(
+            const ContentFilterTestType& data)
+    {
+        static ContentFilterTestTypePubSubType type_support;
+        auto data_ptr = const_cast<ContentFilterTestType*>(&data);
+        auto data_size = type_support.getSerializedSizeProvider(data_ptr)();
+        auto payload = new IContentFilter::SerializedPayload(data_size);
+        values_.emplace_back(payload);
+        type_support.serialize(data_ptr, payload);
+    }
+
+    void add_char_values(
+            std::array<ContentFilterTestType, 5>& data)
+    {
+        data[0].char_field(' ');
+        data[0].struct_field().char_field(' ');
+        data[0].array_char_field()[0] = ' ';
+        data[0].bounded_sequence_char_field().push_back(' ');
+        data[0].unbounded_sequence_char_field().push_back(' ');
+
+        data[1].char_field('A');
+        data[1].struct_field().char_field('A');
+        data[1].array_char_field()[0] = 'A';
+        data[1].bounded_sequence_char_field().push_back('A');
+        data[1].unbounded_sequence_char_field().push_back('A');
+
+        data[2].char_field('Z');
+        data[2].struct_field().char_field('Z');
+        data[2].array_char_field()[0] = 'Z';
+        data[2].bounded_sequence_char_field().push_back('Z');
+        data[2].unbounded_sequence_char_field().push_back('Z');
+
+        data[3].char_field('a');
+        data[3].struct_field().char_field('a');
+        data[3].array_char_field()[0] = 'a';
+        data[3].bounded_sequence_char_field().push_back('a');
+        data[3].unbounded_sequence_char_field().push_back('a');
+
+        data[4].char_field('z');
+        data[4].struct_field().char_field('z');
+        data[4].array_char_field()[0] = 'z';
+        data[4].bounded_sequence_char_field().push_back('z');
+        data[4].unbounded_sequence_char_field().push_back('z');
+    }
+
+    void add_uint8_values(
+            std::array<ContentFilterTestType, 5>& data)
+    {
+        uint8_t min = std::numeric_limits<uint8_t>::lowest();
+        uint8_t max = std::numeric_limits<uint8_t>::max();
+
+        data[0].uint8_field(min);
+        data[0].struct_field().uint8_field(min);
+        data[0].array_uint8_field()[0] = min;
+        data[0].bounded_sequence_uint8_field().push_back(min);
+        data[0].unbounded_sequence_uint8_field().push_back(min);
+
+        data[1].uint8_field(max / 4);
+        data[1].struct_field().uint8_field(max / 4);
+        data[1].array_uint8_field()[0] = max / 4;
+        data[1].bounded_sequence_uint8_field().push_back(max / 4);
+        data[1].unbounded_sequence_uint8_field().push_back(max / 4);
+
+        data[2].uint8_field(max / 3);
+        data[2].struct_field().uint8_field(max / 3);
+        data[2].array_uint8_field()[0] = max / 3;
+        data[2].bounded_sequence_uint8_field().push_back(max / 3);
+        data[2].unbounded_sequence_uint8_field().push_back(max / 3);
+
+        data[3].uint8_field(max / 2);
+        data[3].struct_field().uint8_field(max / 2);
+        data[3].array_uint8_field()[0] = max / 2;
+        data[3].bounded_sequence_uint8_field().push_back(max / 2);
+        data[3].unbounded_sequence_uint8_field().push_back(max / 2);
+
+        data[4].uint8_field(max);
+        data[4].struct_field().uint8_field(max);
+        data[4].array_uint8_field()[0] = max;
+        data[4].bounded_sequence_uint8_field().push_back(max);
+        data[4].unbounded_sequence_uint8_field().push_back(max);
+    }
+
+    void add_int16_values(
+            std::array<ContentFilterTestType, 5>& data)
+    {
+        int16_t min = std::numeric_limits<int16_t>::lowest();
+        int16_t max = std::numeric_limits<int16_t>::max();
+
+        data[0].int16_field(min);
+        data[0].struct_field().int16_field(min);
+        data[0].array_int16_field()[0] = min;
+        data[0].bounded_sequence_int16_field().push_back(min);
+        data[0].unbounded_sequence_int16_field().push_back(min);
+
+        data[1].int16_field(-100);
+        data[1].struct_field().int16_field(-100);
+        data[1].array_int16_field()[0] = -100;
+        data[1].bounded_sequence_int16_field().push_back(-100);
+        data[1].unbounded_sequence_int16_field().push_back(-100);
+
+        data[2].int16_field(0);
+        data[2].struct_field().int16_field(0);
+        data[2].array_int16_field()[0] = 0;
+        data[2].bounded_sequence_int16_field().push_back(0);
+        data[2].unbounded_sequence_int16_field().push_back(0);
+
+        data[3].int16_field(100);
+        data[3].struct_field().int16_field(100);
+        data[3].array_int16_field()[0] = 100;
+        data[3].bounded_sequence_int16_field().push_back(100);
+        data[3].unbounded_sequence_int16_field().push_back(100);
+
+        data[4].int16_field(max);
+        data[4].struct_field().int16_field(max);
+        data[4].array_int16_field()[0] = max;
+        data[4].bounded_sequence_int16_field().push_back(max);
+        data[4].unbounded_sequence_int16_field().push_back(max);
+    }
+
+    void add_uint16_values(
+            std::array<ContentFilterTestType, 5>& data)
+    {
+        uint16_t min = std::numeric_limits<uint16_t>::lowest();
+        uint16_t max = std::numeric_limits<uint16_t>::max();
+
+        data[0].uint16_field(min);
+        data[0].struct_field().uint16_field(min);
+        data[0].array_uint16_field()[0] = min;
+        data[0].bounded_sequence_uint16_field().push_back(min);
+        data[0].unbounded_sequence_uint16_field().push_back(min);
+
+        data[1].uint16_field(max / 4);
+        data[1].struct_field().uint16_field(max / 4);
+        data[1].array_uint16_field()[0] = max / 4;
+        data[1].bounded_sequence_uint16_field().push_back(max / 4);
+        data[1].unbounded_sequence_uint16_field().push_back(max / 4);
+
+        data[2].uint16_field(max / 3);
+        data[2].struct_field().uint16_field(max / 3);
+        data[2].array_uint16_field()[0] = max / 3;
+        data[2].bounded_sequence_uint16_field().push_back(max / 3);
+        data[2].unbounded_sequence_uint16_field().push_back(max / 3);
+
+        data[3].uint16_field(max / 2);
+        data[3].struct_field().uint16_field(max / 2);
+        data[3].array_uint16_field()[0] = max / 2;
+        data[3].bounded_sequence_uint16_field().push_back(max / 2);
+        data[3].unbounded_sequence_uint16_field().push_back(max / 2);
+
+        data[4].uint16_field(max);
+        data[4].struct_field().uint16_field(max);
+        data[4].array_uint16_field()[0] = max;
+        data[4].bounded_sequence_uint16_field().push_back(max);
+        data[4].unbounded_sequence_uint16_field().push_back(max);
+    }
+
+    void add_int32_values(
+            std::array<ContentFilterTestType, 5>& data)
+    {
+        int32_t min = std::numeric_limits<int32_t>::lowest();
+        int32_t max = std::numeric_limits<int32_t>::max();
+
+        data[0].int32_field(min);
+        data[0].struct_field().int32_field(min);
+        data[0].array_int32_field()[0] = min;
+        data[0].bounded_sequence_int32_field().push_back(min);
+        data[0].unbounded_sequence_int32_field().push_back(min);
+
+        data[1].int32_field(-100);
+        data[1].struct_field().int32_field(-100);
+        data[1].array_int32_field()[0] = -100;
+        data[1].bounded_sequence_int32_field().push_back(-100);
+        data[1].unbounded_sequence_int32_field().push_back(-100);
+
+        data[2].int32_field(0);
+        data[2].struct_field().int32_field(0);
+        data[2].array_int32_field()[0] = 0;
+        data[2].bounded_sequence_int32_field().push_back(0);
+        data[2].unbounded_sequence_int32_field().push_back(0);
+
+        data[3].int32_field(100);
+        data[3].struct_field().int32_field(100);
+        data[3].array_int32_field()[0] = 100;
+        data[3].bounded_sequence_int32_field().push_back(100);
+        data[3].unbounded_sequence_int32_field().push_back(100);
+
+        data[4].int32_field(max);
+        data[4].struct_field().int32_field(max);
+        data[4].array_int32_field()[0] = max;
+        data[4].bounded_sequence_int32_field().push_back(max);
+        data[4].unbounded_sequence_int32_field().push_back(max);
+    }
+
+    void add_uint32_values(
+            std::array<ContentFilterTestType, 5>& data)
+    {
+        uint32_t min = std::numeric_limits<uint32_t>::lowest();
+        uint32_t max = std::numeric_limits<uint32_t>::max();
+
+        data[0].uint32_field(min);
+        data[0].struct_field().uint32_field(min);
+        data[0].array_uint32_field()[0] = min;
+        data[0].bounded_sequence_uint32_field().push_back(min);
+        data[0].unbounded_sequence_uint32_field().push_back(min);
+
+        data[1].uint32_field(max / 4);
+        data[1].struct_field().uint32_field(max / 4);
+        data[1].array_uint32_field()[0] = max / 4;
+        data[1].bounded_sequence_uint32_field().push_back(max / 4);
+        data[1].unbounded_sequence_uint32_field().push_back(max / 4);
+
+        data[2].uint32_field(max / 3);
+        data[2].struct_field().uint32_field(max / 3);
+        data[2].array_uint32_field()[0] = max / 3;
+        data[2].bounded_sequence_uint32_field().push_back(max / 3);
+        data[2].unbounded_sequence_uint32_field().push_back(max / 3);
+
+        data[3].uint32_field(max / 2);
+        data[3].struct_field().uint32_field(max / 2);
+        data[3].array_uint32_field()[0] = max / 2;
+        data[3].bounded_sequence_uint32_field().push_back(max / 2);
+        data[3].unbounded_sequence_uint32_field().push_back(max / 2);
+
+        data[4].uint32_field(max);
+        data[4].struct_field().uint32_field(max);
+        data[4].array_uint32_field()[0] = max;
+        data[4].bounded_sequence_uint32_field().push_back(max);
+        data[4].unbounded_sequence_uint32_field().push_back(max);
+    }
+
+    void add_int64_values(
+            std::array<ContentFilterTestType, 5>& data)
+    {
+        int64_t min = std::numeric_limits<int64_t>::lowest();
+        int64_t max = std::numeric_limits<int64_t>::max();
+
+        data[0].int64_field(min);
+        data[0].struct_field().int64_field(min);
+        data[0].array_int64_field()[0] = min;
+        data[0].bounded_sequence_int64_field().push_back(min);
+        data[0].unbounded_sequence_int64_field().push_back(min);
+
+        data[1].int64_field(-100);
+        data[1].struct_field().int64_field(-100);
+        data[1].array_int64_field()[0] = -100;
+        data[1].bounded_sequence_int64_field().push_back(-100);
+        data[1].unbounded_sequence_int64_field().push_back(-100);
+
+        data[2].int64_field(0);
+        data[2].struct_field().int64_field(0);
+        data[2].array_int64_field()[0] = 0;
+        data[2].bounded_sequence_int64_field().push_back(0);
+        data[2].unbounded_sequence_int64_field().push_back(0);
+
+        data[3].int64_field(100);
+        data[3].struct_field().int64_field(100);
+        data[3].array_int64_field()[0] = 100;
+        data[3].bounded_sequence_int64_field().push_back(100);
+        data[3].unbounded_sequence_int64_field().push_back(100);
+
+        data[4].int64_field(max);
+        data[4].struct_field().int64_field(max);
+        data[4].array_int64_field()[0] = max;
+        data[4].bounded_sequence_int64_field().push_back(max);
+        data[4].unbounded_sequence_int64_field().push_back(max);
+    }
+
+    void add_uint64_values(
+            std::array<ContentFilterTestType, 5>& data)
+    {
+        uint64_t min = std::numeric_limits<uint64_t>::lowest();
+        uint64_t max = std::numeric_limits<uint64_t>::max();
+
+        data[0].uint64_field(min);
+        data[0].struct_field().uint64_field(min);
+        data[0].array_uint64_field()[0] = min;
+        data[0].bounded_sequence_uint64_field().push_back(min);
+        data[0].unbounded_sequence_uint64_field().push_back(min);
+
+        data[1].uint64_field(max / 4);
+        data[1].struct_field().uint64_field(max / 4);
+        data[1].array_uint64_field()[0] = max / 4;
+        data[1].bounded_sequence_uint64_field().push_back(max / 4);
+        data[1].unbounded_sequence_uint64_field().push_back(max / 4);
+
+        data[2].uint64_field(max / 3);
+        data[2].struct_field().uint64_field(max / 3);
+        data[2].array_uint64_field()[0] = max / 3;
+        data[2].bounded_sequence_uint64_field().push_back(max / 3);
+        data[2].unbounded_sequence_uint64_field().push_back(max / 3);
+
+        data[3].uint64_field(max / 2);
+        data[3].struct_field().uint64_field(max / 2);
+        data[3].array_uint64_field()[0] = max / 2;
+        data[3].bounded_sequence_uint64_field().push_back(max / 2);
+        data[3].unbounded_sequence_uint64_field().push_back(max / 2);
+
+        data[4].uint64_field(max);
+        data[4].struct_field().uint64_field(max);
+        data[4].array_uint64_field()[0] = max;
+        data[4].bounded_sequence_uint64_field().push_back(max);
+        data[4].unbounded_sequence_uint64_field().push_back(max);
+    }
+
+    void add_float_values(
+            std::array<ContentFilterTestType, 5>& data)
+    {
+        float min = std::numeric_limits<float>::lowest();
+        float max = std::numeric_limits<float>::max();
+
+        data[0].float_field(min);
+        data[0].struct_field().float_field(min);
+        data[0].array_float_field()[0] = min;
+        data[0].bounded_sequence_float_field().push_back(min);
+        data[0].unbounded_sequence_float_field().push_back(min);
+
+        data[1].float_field(-3.14159f);
+        data[1].struct_field().float_field(-3.14159f);
+        data[1].array_float_field()[0] = -3.14159f;
+        data[1].bounded_sequence_float_field().push_back(-3.14159f);
+        data[1].unbounded_sequence_float_field().push_back(-3.14159f);
+
+        data[2].float_field(0.0f);
+        data[2].struct_field().float_field(0.0f);
+        data[2].array_float_field()[0] = 0.0f;
+        data[2].bounded_sequence_float_field().push_back(0.0f);
+        data[2].unbounded_sequence_float_field().push_back(0.0f);
+
+        data[3].float_field(3.14159f);
+        data[3].struct_field().float_field(3.14159f);
+        data[3].array_float_field()[0] = 3.14159f;
+        data[3].bounded_sequence_float_field().push_back(3.14159f);
+        data[3].unbounded_sequence_float_field().push_back(3.14159f);
+
+        data[4].float_field(max);
+        data[4].struct_field().float_field(max);
+        data[4].array_float_field()[0] = max;
+        data[4].bounded_sequence_float_field().push_back(max);
+        data[4].unbounded_sequence_float_field().push_back(max);
+    }
+
+    void add_double_values(
+            std::array<ContentFilterTestType, 5>& data)
+    {
+        double min = std::numeric_limits<double>::lowest();
+        double max = std::numeric_limits<double>::max();
+
+        data[0].double_field(min);
+        data[0].struct_field().double_field(min);
+        data[0].array_double_field()[0] = min;
+        data[0].bounded_sequence_double_field().push_back(min);
+        data[0].unbounded_sequence_double_field().push_back(min);
+
+        data[1].double_field(-3.14159);
+        data[1].struct_field().double_field(-3.14159);
+        data[1].array_double_field()[0] = -3.14159;
+        data[1].bounded_sequence_double_field().push_back(-3.14159);
+        data[1].unbounded_sequence_double_field().push_back(-3.14159);
+
+        data[2].double_field(0.0);
+        data[2].struct_field().double_field(0.0);
+        data[2].array_double_field()[0] = 0.0;
+        data[2].bounded_sequence_double_field().push_back(0.0);
+        data[2].unbounded_sequence_double_field().push_back(0.0);
+
+        data[3].double_field(3.14159);
+        data[3].struct_field().double_field(3.14159);
+        data[3].array_double_field()[0] = 3.14159;
+        data[3].bounded_sequence_double_field().push_back(3.14159);
+        data[3].unbounded_sequence_double_field().push_back(3.14159);
+
+        data[4].double_field(max);
+        data[4].struct_field().double_field(max);
+        data[4].array_double_field()[0] = max;
+        data[4].bounded_sequence_double_field().push_back(max);
+        data[4].unbounded_sequence_double_field().push_back(max);
+    }
+
+    void add_long_double_values(
+            std::array<ContentFilterTestType, 5>& data)
+    {
+        long double min = std::numeric_limits<long double>::lowest();
+        long double max = std::numeric_limits<long double>::max();
+
+        data[0].long_double_field(min);
+        data[0].struct_field().long_double_field(min);
+        data[0].array_long_double_field()[0] = min;
+        data[0].bounded_sequence_long_double_field().push_back(min);
+        data[0].unbounded_sequence_long_double_field().push_back(min);
+
+        data[1].long_double_field(-3.14159);
+        data[1].struct_field().long_double_field(-3.14159);
+        data[1].array_long_double_field()[0] = -3.14159;
+        data[1].bounded_sequence_long_double_field().push_back(-3.14159);
+        data[1].unbounded_sequence_long_double_field().push_back(-3.14159);
+
+        data[2].long_double_field(0.0);
+        data[2].struct_field().long_double_field(0.0);
+        data[2].array_long_double_field()[0] = 0.0;
+        data[2].bounded_sequence_long_double_field().push_back(0.0);
+        data[2].unbounded_sequence_long_double_field().push_back(0.0);
+
+        data[3].long_double_field(3.14159);
+        data[3].struct_field().long_double_field(3.14159);
+        data[3].array_long_double_field()[0] = 3.14159;
+        data[3].bounded_sequence_long_double_field().push_back(3.14159);
+        data[3].unbounded_sequence_long_double_field().push_back(3.14159);
+
+        data[4].long_double_field(max);
+        data[4].struct_field().long_double_field(max);
+        data[4].array_long_double_field()[0] = max;
+        data[4].bounded_sequence_long_double_field().push_back(max);
+        data[4].unbounded_sequence_long_double_field().push_back(max);
+    }
+
+    void add_bool_values(
+            std::array<ContentFilterTestType, 5>& data)
+    {
+        for (size_t i = 0; i < 2; ++i)
+        {
+            data[i].bool_field(false);
+            data[i].struct_field().bool_field(false);
+            data[i].array_bool_field()[0] = false;
+            data[i].bounded_sequence_bool_field().push_back(false);
+            data[i].unbounded_sequence_bool_field().push_back(false);
+        }
+
+        for (size_t i = 2; i < 5; ++i)
+        {
+            data[i].bool_field(true);
+            data[i].struct_field().bool_field(true);
+            data[i].array_bool_field()[0] = true;
+            data[i].bounded_sequence_bool_field().push_back(true);
+            data[i].unbounded_sequence_bool_field().push_back(true);
+        }
+    }
+
+    void add_string_values(
+            std::array<ContentFilterTestType, 5>& data)
+    {
+        data[0].string_field("");
+        data[0].struct_field().string_field("");
+        data[0].array_string_field()[0] = "";
+        data[0].bounded_sequence_string_field().push_back("");
+        data[0].unbounded_sequence_string_field().push_back("");
+
+        data[1].string_field("   ");
+        data[1].struct_field().string_field("   ");
+        data[1].array_string_field()[0] = "   ";
+        data[1].bounded_sequence_string_field().push_back("   ");
+        data[1].unbounded_sequence_string_field().push_back("   ");
+
+        data[2].string_field(" AA");
+        data[2].struct_field().string_field(" AA");
+        data[2].array_string_field()[0] = " AA";
+        data[2].bounded_sequence_string_field().push_back(" AA");
+        data[2].unbounded_sequence_string_field().push_back(" AA");
+
+        data[3].string_field(" AZ");
+        data[3].struct_field().string_field(" AZ");
+        data[3].array_string_field()[0] = " AZ";
+        data[3].bounded_sequence_string_field().push_back(" AZ");
+        data[3].unbounded_sequence_string_field().push_back(" AZ");
+
+        data[4].string_field("ZZZ");
+        data[4].struct_field().string_field("ZZZ");
+        data[4].array_string_field()[0] = "ZZZ";
+        data[4].bounded_sequence_string_field().push_back("ZZZ");
+        data[4].unbounded_sequence_string_field().push_back("ZZZ");
+    }
+
+    void add_enum_values(
+            std::array<ContentFilterTestType, 5>& data)
+    {
+        data[0].enum_field(Color::RED);
+        data[0].struct_field().enum_field(Color::RED);
+        data[0].array_enum_field()[0] = Color::RED;
+        data[0].bounded_sequence_enum_field().push_back(Color::RED);
+        data[0].unbounded_sequence_enum_field().push_back(Color::RED);
+
+        data[1].enum_field(Color::GREEN);
+        data[1].struct_field().int16_field(Color::GREEN);
+        data[1].array_int16_field()[0] = Color::GREEN;
+        data[1].bounded_sequence_int16_field().push_back(Color::GREEN);
+        data[1].unbounded_sequence_int16_field().push_back(Color::GREEN);
+
+        data[2].enum_field(Color::BLUE);
+        data[2].struct_field().int16_field(Color::BLUE);
+        data[2].array_int16_field()[0] = Color::BLUE;
+        data[2].bounded_sequence_int16_field().push_back(Color::BLUE);
+        data[2].unbounded_sequence_int16_field().push_back(Color::BLUE);
+
+        data[3].enum_field(Color::YELLOW);
+        data[3].struct_field().int16_field(Color::YELLOW);
+        data[3].array_int16_field()[0] = Color::YELLOW;
+        data[3].bounded_sequence_int16_field().push_back(Color::YELLOW);
+        data[3].unbounded_sequence_int16_field().push_back(Color::YELLOW);
+
+        data[4].enum_field(Color::MAGENTA);
+        data[4].struct_field().int16_field(Color::MAGENTA);
+        data[4].array_int16_field()[0] = Color::MAGENTA;
+        data[4].bounded_sequence_int16_field().push_back(Color::MAGENTA);
+        data[4].unbounded_sequence_int16_field().push_back(Color::MAGENTA);
+    }
+
+    void add_enum2_values(
+            std::array<ContentFilterTestType, 5>& data)
+    {
+        data[0].enum2_field(Material::WOOD);
+        data[0].struct_field().enum2_field(Material::WOOD);
+        data[0].array_enum2_field()[0] = Material::WOOD;
+        data[0].bounded_sequence_enum2_field().push_back(Material::WOOD);
+        data[0].unbounded_sequence_enum2_field().push_back(Material::WOOD);
+
+        data[1].enum2_field(Material::PLASTIC);
+        data[1].struct_field().enum2_field(Material::PLASTIC);
+        data[1].array_enum2_field()[0] = Material::PLASTIC;
+        data[1].bounded_sequence_enum2_field().push_back(Material::PLASTIC);
+        data[1].unbounded_sequence_enum2_field().push_back(Material::PLASTIC);
+
+        data[2].enum2_field(Material::METAL);
+        data[2].struct_field().enum2_field(Material::METAL);
+        data[2].array_enum2_field()[0] = Material::METAL;
+        data[2].bounded_sequence_enum2_field().push_back(Material::METAL);
+        data[2].unbounded_sequence_enum2_field().push_back(Material::METAL);
+
+        data[3].enum2_field(Material::CONCRETE);
+        data[3].struct_field().enum2_field(Material::CONCRETE);
+        data[3].array_enum2_field()[0] = Material::CONCRETE;
+        data[3].bounded_sequence_enum2_field().push_back(Material::CONCRETE);
+        data[3].unbounded_sequence_enum2_field().push_back(Material::CONCRETE);
+
+        data[4].enum2_field(Material::STONE);
+        data[4].struct_field().enum2_field(Material::STONE);
+        data[4].array_enum2_field()[0] = Material::STONE;
+        data[4].bounded_sequence_enum2_field().push_back(Material::STONE);
+        data[4].unbounded_sequence_enum2_field().push_back(Material::STONE);
+    }
+
+};
+
+struct DDSSQLFilterValueParams
+{
+    std::string test_case_name;
+    std::string expression;
+    std::vector<std::string> params;
+    std::vector<bool> samples_filtered;
+};
+
+class DDSSQLFilterValueTests : public testing::TestWithParam<DDSSQLFilterValueParams>
+{
+public:
+
+    struct PrintToStringParamName
+    {
+        template<class ParamType>
+        std::string operator ()(
+                const ::testing::TestParamInfo<ParamType>& info) const
+        {
+            const auto& test_params = static_cast<const DDSSQLFilterValueParams&>(info.param);
+            return test_params.test_case_name;
+        }
+
+    };
+
+protected:
+
+    DDSFilterFactory uut;
+    ContentFilterTestTypePubSubType type_support;
+};
+
+TEST_P(DDSSQLFilterValueTests, test_filtered_value)
+{
+    const auto& input = GetParam();
+    const auto& values = DDSSQLFilterValueGlobalData::values();
+    const auto& results = input.samples_filtered;
+    ASSERT_EQ(results.size(), values.size());
+
+    IContentFilter* filter_instance = nullptr;
+    auto ret = create_content_filter(uut, input.expression, input.params, &type_support, filter_instance);
+    EXPECT_EQ(ReturnCode_t::RETCODE_OK, ret);
+    ASSERT_NE(nullptr, filter_instance);
+
+    for (size_t i = 0; i < values.size(); ++i)
+    {
+        IContentFilter::FilterSampleInfo info;
+        IContentFilter::GUID_t guid;
+        EXPECT_EQ(results[i], filter_instance->evaluate(*values[i], info, guid)) << "with i = " << i;
+    }
+
+    ret = uut.delete_content_filter("DDSSQL", filter_instance);
+    EXPECT_EQ(ReturnCode_t::RETCODE_OK, ret);
+}
+
+TEST_F(DDSSQLFilterValueTests, test_compound_not)
+{
+    static const std::string expression = "NOT (float_field = %0)";
+
+    static const std::array<std::string, 5> param_values =
+    {
+        std::to_string(std::numeric_limits<float>::lowest()),
+        "-3.14159",
+        "0",
+        "3.14159",
+        std::to_string(std::numeric_limits<float>::max())
+    };
+
+    IContentFilter* filter = nullptr;
+    auto ret = create_content_filter(uut, expression, { param_values.back() }, &type_support, filter);
+    EXPECT_EQ(ReturnCode_t::RETCODE_OK, ret);
+    ASSERT_NE(nullptr, filter);
+
+    const auto& values = DDSSQLFilterValueGlobalData::values();
+    std::array<bool, 5> results;
+    StackAllocatedSequence<const char*, 1> params;
+    params.length(1);
+
+    ASSERT_EQ(results.size(), values.size());
+
+    for (size_t i = 0; i < param_values.size(); ++i)
+    {
+        // Update parameter value
+        params[0] = param_values[i].c_str();
+        ret = uut.create_content_filter("DDSSQL", "ContentFilterTestType", &type_support, nullptr, params, filter);
+        EXPECT_EQ(ReturnCode_t::RETCODE_OK, ret);
+        ASSERT_NE(nullptr, filter);
+
+        // Update expected results
+        results.fill(true);
+        results[i] = false;
+        for (size_t j = 0; j < values.size(); ++j)
+        {
+            IContentFilter::FilterSampleInfo info;
+            IContentFilter::GUID_t guid;
+            EXPECT_EQ(results[j], filter->evaluate(*values[j], info, guid)) << "with i = " << i << ", j = " << j;
+        }
+    }
+
+}
+
+TEST_F(DDSSQLFilterValueTests, test_compound_and)
+{
+    static const std::string expression = "float_field BETWEEN %0 AND %1 AND int16_field < 0";
+
+    IContentFilter* filter = nullptr;
+    auto ret = create_content_filter(uut, expression, { "-3.14159", "3.14159" }, &type_support, filter);
+    EXPECT_EQ(ReturnCode_t::RETCODE_OK, ret);
+    ASSERT_NE(nullptr, filter);
+
+    const auto& values = DDSSQLFilterValueGlobalData::values();
+    std::array<bool, 5> results{false, true, false, false, false};
+
+    ASSERT_EQ(results.size(), values.size());
+
+    for (size_t i = 0; i < values.size(); ++i)
+    {
+        IContentFilter::FilterSampleInfo info;
+        IContentFilter::GUID_t guid;
+        EXPECT_EQ(results[i], filter->evaluate(*values[i], info, guid)) << "with i = " << i;
+    }
+}
+
+TEST_F(DDSSQLFilterValueTests, test_compound_or)
+{
+    static const std::string expression = "float_field BETWEEN %0 AND %1 OR int16_field > 0";
+
+    IContentFilter* filter = nullptr;
+    auto ret = create_content_filter(uut, expression, { "-3.14159", "3.14159" }, &type_support, filter);
+    EXPECT_EQ(ReturnCode_t::RETCODE_OK, ret);
+    ASSERT_NE(nullptr, filter);
+
+    const auto& values = DDSSQLFilterValueGlobalData::values();
+    std::array<bool, 5> results{false, true, true, true, true};
+
+    ASSERT_EQ(results.size(), values.size());
+
+    for (size_t i = 0; i < values.size(); ++i)
+    {
+        IContentFilter::FilterSampleInfo info;
+        IContentFilter::GUID_t guid;
+        EXPECT_EQ(results[i], filter->evaluate(*values[i], info, guid)) << "with i = " << i;
+    }
+}
+
+static void add_test_filtered_value_inputs(
+        const std::string& test_prefix,
+        const std::string& field_name,
+        const std::array<std::pair<std::string, std::string>, 5>& values,
+        std::vector<DDSSQLFilterValueParams>& inputs,
+        const std::array<std::array<std::array<bool, 5>, 5>, 6>& results = DDSSQLFilterValueGlobalData::results())
+{
+    auto& ops = DDSSQLFilterValueGlobalData::ops();
+    for (size_t i = 0; i < ops.size(); ++i)
+    {
+        auto& op = ops[i];
+        for (size_t j = 0; j < values.size(); ++j)
+        {
+            auto& results_row = results[i][j];
+            DDSSQLFilterValueParams input
+            {
+                test_prefix + "_" + op.second + "_" + values[j].second,
+                field_name + " " + op.first + " " + values[j].first,
+                {},
+                { results_row.begin(), results_row.end() }
+            };
+            inputs.emplace_back(input);
+
+            input.test_case_name += "_P0";
+            input.expression = field_name + " " + op.first + " %0";
+            input.params.push_back(values[j].first);
+            inputs.emplace_back(input);
+        }
+    }
+}
+
+static void add_negative_test_filtered_value_inputs(
+        const std::string& test_prefix,
+        const std::string& field_name,
+        const std::array<std::pair<std::string, std::string>, 5>& values,
+        std::vector<DDSSQLFilterValueParams>& inputs)
+{
+    auto& ops = DDSSQLFilterValueGlobalData::ops();
+    for (size_t i = 0; i < ops.size(); ++i)
+    {
+        auto& op = ops[i];
+        for (size_t j = 0; j < values.size(); ++j)
+        {
+            DDSSQLFilterValueParams input
+            {
+                test_prefix + "_" + op.second + "_" + values[j].second,
+                field_name + " " + op.first + " " + values[j].first,
+                {},
+                { false, false, false, false, false }
+            };
+            inputs.emplace_back(input);
+
+            input.test_case_name += "_P0";
+            input.expression = field_name + " " + op.first + " %0";
+            input.params.push_back(values[j].first);
+            inputs.emplace_back(input);
+        }
+    }
+}
+
+static std::vector<DDSSQLFilterValueParams> get_test_filtered_value_char_inputs()
+{
+    static const std::array<std::pair<std::string, std::string>, 5> values =
+    {
+        std::pair<std::string, std::string>{"' '", "minus_2"},
+        std::pair<std::string, std::string>{"'A'", "minus_1"},
+        std::pair<std::string, std::string>{"'Z'", "0"},
+        std::pair<std::string, std::string>{"'a'", "plus_1"},
+        std::pair<std::string, std::string>{"'z'", "plus_2"}
+    };
+
+    std::string field_name = "char_field";
+    std::string bounded_seq_name = "bounded_sequence_" + field_name;
+    std::string unbounded_seq_name = "unbounded_sequence_" + field_name;
+
+    std::vector<DDSSQLFilterValueParams> inputs;
+    add_test_filtered_value_inputs("plain_field", field_name, values, inputs);
+    add_test_filtered_value_inputs("in_struct", "struct_field." + field_name, values, inputs);
+    add_test_filtered_value_inputs("array", "array_" + field_name + "[0]", values, inputs);
+    add_test_filtered_value_inputs("bounded_sequence", bounded_seq_name + "[0]", values, inputs);
+    add_negative_test_filtered_value_inputs("neg_bounded_sequence", bounded_seq_name + "[2]", values, inputs);
+    add_test_filtered_value_inputs("unbounded_sequence", unbounded_seq_name + "[0]", values, inputs);
+    add_negative_test_filtered_value_inputs("neg_unbounded_sequence", unbounded_seq_name + "[2]", values, inputs);
+    return inputs;
+}
+
+static std::vector<DDSSQLFilterValueParams> get_test_filtered_value_string_inputs()
+{
+    static const std::array<std::pair<std::string, std::string>, 5> values =
+    {
+        std::pair<std::string, std::string>{"''", "minus_2"},
+        std::pair<std::string, std::string>{"'   '", "minus_1"},
+        std::pair<std::string, std::string>{"' AA'", "0"},
+        std::pair<std::string, std::string>{"' AZ'", "plus_1"},
+        std::pair<std::string, std::string>{"'ZZZ'", "plus_2"}
+    };
+
+    std::string field_name = "string_field";
+    std::string bounded_seq_name = "bounded_sequence_" + field_name;
+    std::string unbounded_seq_name = "unbounded_sequence_" + field_name;
+
+    std::vector<DDSSQLFilterValueParams> inputs;
+    add_test_filtered_value_inputs("plain_field", field_name, values, inputs);
+    add_test_filtered_value_inputs("in_struct", "struct_field." + field_name, values, inputs);
+    add_test_filtered_value_inputs("array", "array_" + field_name + "[0]", values, inputs);
+    add_test_filtered_value_inputs("bounded_sequence", bounded_seq_name + "[0]", values, inputs);
+    add_negative_test_filtered_value_inputs("neg_bounded_sequence", bounded_seq_name + "[2]", values, inputs);
+    add_test_filtered_value_inputs("unbounded_sequence", unbounded_seq_name + "[0]", values, inputs);
+    add_negative_test_filtered_value_inputs("neg_unbounded_sequence", unbounded_seq_name + "[2]", values, inputs);
+    return inputs;
+}
+
+static std::vector<DDSSQLFilterValueParams> get_test_filtered_value_boolean_inputs()
+{
+    static const std::array<std::pair<std::string, std::string>, 5> values =
+    {
+        std::pair<std::string, std::string>{"FALSE", "minus_2"},
+        std::pair<std::string, std::string>{"FALSE", "minus_1"},
+        std::pair<std::string, std::string>{"TRUE", "0"},
+        std::pair<std::string, std::string>{"TRUE", "plus_1"},
+        std::pair<std::string, std::string>{"TRUE", "plus_2"}
+    };
+
+    std::array<std::array<std::array<bool, 5>, 5>, 6> results;
+    // EQ
+    results[0][0] = { true, true, false, false, false };
+    results[0][1] = { true, true, false, false, false };
+    results[0][2] = { false, false, true, true, true };
+    results[0][3] = { false, false, true, true, true };
+    results[0][4] = { false, false, true, true, true };
+    // NE
+    results[1][0] = { false, false, true, true, true };
+    results[1][1] = { false, false, true, true, true };
+    results[1][2] = { true, true, false, false, false };
+    results[1][3] = { true, true, false, false, false };
+    results[1][4] = { true, true, false, false, false };
+    // LT
+    results[2][0] = { false, false, false, false, false };
+    results[2][1] = { false, false, false, false, false };
+    results[2][2] = { true, true, false, false, false };
+    results[2][3] = { true, true, false, false, false };
+    results[2][4] = { true, true, false, false, false };
+    // LE
+    results[3][0] = { true, true, false, false, false };
+    results[3][1] = { true, true, false, false, false };
+    results[3][2] = { true, true, true, true, true };
+    results[3][3] = { true, true, true, true, true };
+    results[3][4] = { true, true, true, true, true };
+    // GT
+    results[4][0] = { false, false, true, true, true };
+    results[4][1] = { false, false, true, true, true };
+    results[4][2] = { false, false, false, false, false };
+    results[4][3] = { false, false, false, false, false };
+    results[4][4] = { false, false, false, false, false };
+    // GE
+    results[5][0] = { true, true, true, true, true };
+    results[5][1] = { true, true, true, true, true };
+    results[5][2] = { false, false, true, true, true };
+    results[5][3] = { false, false, true, true, true };
+    results[5][4] = { false, false, true, true, true };
+
+    std::string field_name = "bool_field";
+    std::string bounded_seq_name = "bounded_sequence_" + field_name;
+    std::string unbounded_seq_name = "unbounded_sequence_" + field_name;
+
+    std::vector<DDSSQLFilterValueParams> inputs;
+    add_test_filtered_value_inputs("plain_field", field_name, values, inputs, results);
+    add_test_filtered_value_inputs("in_struct", "struct_field." + field_name, values, inputs, results);
+    add_test_filtered_value_inputs("array", "array_" + field_name + "[0]", values, inputs, results);
+    add_test_filtered_value_inputs("bounded_sequence", bounded_seq_name + "[0]", values, inputs, results);
+    add_negative_test_filtered_value_inputs("neg_bounded_sequence", bounded_seq_name + "[2]", values, inputs);
+    add_test_filtered_value_inputs("unbounded_sequence", unbounded_seq_name + "[0]", values, inputs, results);
+    add_negative_test_filtered_value_inputs("neg_unbounded_sequence", unbounded_seq_name + "[2]", values, inputs);
+    return inputs;
+}
+
+template<typename T>
+static std::vector<DDSSQLFilterValueParams> get_test_filtered_value_unsigned_integer_inputs(
+        const std::string& field_name)
+{
+    constexpr T max = std::numeric_limits<T>::max();
+    static const std::array<std::pair<std::string, std::string>, 5> values =
+    {
+        std::pair<std::string, std::string>{std::to_string(std::numeric_limits<T>::lowest()), "minus_2"},
+        std::pair<std::string, std::string>{std::to_string(max / 4), "minus_1"},
+        std::pair<std::string, std::string>{std::to_string(max / 3), "0"},
+        std::pair<std::string, std::string>{std::to_string(max / 2), "plus_1"},
+        std::pair<std::string, std::string>{std::to_string(max), "plus_2"}
+    };
+
+    std::string bounded_seq_name = "bounded_sequence_" + field_name;
+    std::string unbounded_seq_name = "unbounded_sequence_" + field_name;
+
+    std::vector<DDSSQLFilterValueParams> inputs;
+    add_test_filtered_value_inputs("plain_field", field_name, values, inputs);
+    add_test_filtered_value_inputs("in_struct", "struct_field." + field_name, values, inputs);
+    add_test_filtered_value_inputs("array", "array_" + field_name + "[0]", values, inputs);
+    add_test_filtered_value_inputs("bounded_sequence", bounded_seq_name + "[0]", values, inputs);
+    add_negative_test_filtered_value_inputs("neg_bounded_sequence", bounded_seq_name + "[2]", values, inputs);
+    add_test_filtered_value_inputs("unbounded_sequence", unbounded_seq_name + "[0]", values, inputs);
+    add_negative_test_filtered_value_inputs("neg_unbounded_sequence", unbounded_seq_name + "[2]", values, inputs);
+    return inputs;
+}
+
+static std::vector<DDSSQLFilterValueParams> get_test_filtered_value_uint8_inputs()
+{
+    return get_test_filtered_value_unsigned_integer_inputs<uint8_t>("uint8_field");
+}
+
+static std::vector<DDSSQLFilterValueParams> get_test_filtered_value_uint16_inputs()
+{
+    return get_test_filtered_value_unsigned_integer_inputs<uint16_t>("uint16_field");
+}
+
+static std::vector<DDSSQLFilterValueParams> get_test_filtered_value_uint32_inputs()
+{
+    return get_test_filtered_value_unsigned_integer_inputs<uint32_t>("uint32_field");
+}
+
+static std::vector<DDSSQLFilterValueParams> get_test_filtered_value_uint64_inputs()
+{
+    return get_test_filtered_value_unsigned_integer_inputs<uint64_t>("uint64_field");
+}
+
+template<typename T>
+static std::vector<DDSSQLFilterValueParams> get_test_filtered_value_signed_integer_inputs(
+        const std::string& field_name)
+{
+    static const std::array<std::pair<std::string, std::string>, 5> values =
+    {
+        std::pair<std::string, std::string>{std::to_string(std::numeric_limits<T>::lowest()), "minus_2"},
+        std::pair<std::string, std::string>{"-100", "minus_1"},
+        std::pair<std::string, std::string>{"0", "0"},
+        std::pair<std::string, std::string>{"100", "plus_1"},
+        std::pair<std::string, std::string>{std::to_string(std::numeric_limits<T>::max()), "plus_2"}
+    };
+
+    std::string bounded_seq_name = "bounded_sequence_" + field_name;
+    std::string unbounded_seq_name = "unbounded_sequence_" + field_name;
+
+    std::vector<DDSSQLFilterValueParams> inputs;
+    add_test_filtered_value_inputs("plain_field", field_name, values, inputs);
+    add_test_filtered_value_inputs("in_struct", "struct_field." + field_name, values, inputs);
+    add_test_filtered_value_inputs("array", "array_" + field_name + "[0]", values, inputs);
+    add_test_filtered_value_inputs("bounded_sequence", bounded_seq_name + "[0]", values, inputs);
+    add_negative_test_filtered_value_inputs("neg_bounded_sequence", bounded_seq_name + "[2]", values, inputs);
+    add_test_filtered_value_inputs("unbounded_sequence", unbounded_seq_name + "[0]", values, inputs);
+    add_negative_test_filtered_value_inputs("neg_unbounded_sequence", unbounded_seq_name + "[2]", values, inputs);
+    return inputs;
+}
+
+static std::vector<DDSSQLFilterValueParams> get_test_filtered_value_int16_inputs()
+{
+    return get_test_filtered_value_signed_integer_inputs<int16_t>("int16_field");
+}
+
+static std::vector<DDSSQLFilterValueParams> get_test_filtered_value_int32_inputs()
+{
+    return get_test_filtered_value_signed_integer_inputs<int32_t>("int32_field");
+}
+
+static std::vector<DDSSQLFilterValueParams> get_test_filtered_value_int64_inputs()
+{
+    return get_test_filtered_value_signed_integer_inputs<int64_t>("int64_field");
+}
+
+template<typename T>
+static std::vector<DDSSQLFilterValueParams> get_test_filtered_value_float_inputs(
+        const std::string& field_name)
+{
+    static const std::array<std::pair<std::string, std::string>, 5> values =
+    {
+        std::pair<std::string, std::string>{std::to_string(std::numeric_limits<T>::lowest()), "minus_2"},
+        std::pair<std::string, std::string>{"-3.14159", "minus_1"},
+        std::pair<std::string, std::string>{"0", "0"},
+        std::pair<std::string, std::string>{"3.14159", "plus_1"},
+        std::pair<std::string, std::string>{std::to_string(std::numeric_limits<T>::max()), "plus_2"}
+    };
+
+    std::string bounded_seq_name = "bounded_sequence_" + field_name;
+    std::string unbounded_seq_name = "unbounded_sequence_" + field_name;
+
+    std::vector<DDSSQLFilterValueParams> inputs;
+    add_test_filtered_value_inputs("plain_field", field_name, values, inputs);
+    add_test_filtered_value_inputs("in_struct", "struct_field." + field_name, values, inputs);
+    add_test_filtered_value_inputs("array", "array_" + field_name + "[0]", values, inputs);
+    add_test_filtered_value_inputs("bounded_sequence", bounded_seq_name + "[0]", values, inputs);
+    add_negative_test_filtered_value_inputs("neg_bounded_sequence", bounded_seq_name + "[2]", values, inputs);
+    add_test_filtered_value_inputs("unbounded_sequence", unbounded_seq_name + "[0]", values, inputs);
+    add_negative_test_filtered_value_inputs("neg_unbounded_sequence", unbounded_seq_name + "[2]", values, inputs);
+    return inputs;
+}
+
+static std::vector<DDSSQLFilterValueParams> get_test_filtered_value_float_inputs()
+{
+    return get_test_filtered_value_float_inputs<float>("float_field");
+}
+
+static std::vector<DDSSQLFilterValueParams> get_test_filtered_value_double_inputs()
+{
+    return get_test_filtered_value_float_inputs<double>("double_field");
+}
+
+static std::vector<DDSSQLFilterValueParams> get_test_filtered_value_long_double_inputs()
+{
+    return get_test_filtered_value_float_inputs<long double>("long_double_field");
+}
+
+static std::vector<DDSSQLFilterValueParams> get_test_filtered_value_enum_inputs()
+{
+    static const std::array<std::pair<std::string, std::string>, 5> values =
+    {
+        std::pair<std::string, std::string>{"'RED'", "minus_2"},
+        std::pair<std::string, std::string>{"'GREEN'", "minus_1"},
+        std::pair<std::string, std::string>{"'BLUE'", "0"},
+        std::pair<std::string, std::string>{"'YELLOW'", "plus_1"},
+        std::pair<std::string, std::string>{"'MAGENTA'", "plus_2"}
+    };
+
+    std::string field_name = "enum_field";
+    std::string bounded_seq_name = "bounded_sequence_" + field_name;
+    std::string unbounded_seq_name = "unbounded_sequence_" + field_name;
+
+    std::vector<DDSSQLFilterValueParams> inputs;
+    add_test_filtered_value_inputs("plain_field", field_name, values, inputs);
+    add_test_filtered_value_inputs("DISABLED_in_struct", "struct_field." + field_name, values, inputs);
+    add_test_filtered_value_inputs("DISABLED_array", "array_" + field_name + "[0]", values, inputs);
+    add_test_filtered_value_inputs("DISABLED_bounded_sequence", bounded_seq_name + "[0]", values, inputs);
+    add_negative_test_filtered_value_inputs("neg_bounded_sequence", bounded_seq_name + "[2]", values, inputs);
+    add_test_filtered_value_inputs("DISABLED_unbounded_sequence", unbounded_seq_name + "[0]", values, inputs);
+    add_negative_test_filtered_value_inputs("neg_unbounded_sequence", unbounded_seq_name + "[2]", values, inputs);
+    return inputs;
+}
+
+static std::vector<DDSSQLFilterValueParams> get_test_filtered_value_enum2_inputs()
+{
+    static const std::array<std::pair<std::string, std::string>, 5> values =
+    {
+        std::pair<std::string, std::string>{"'WOOD'", "minus_2"},
+        std::pair<std::string, std::string>{"'PLASTIC'", "minus_1"},
+        std::pair<std::string, std::string>{"'METAL'", "0"},
+        std::pair<std::string, std::string>{"'CONCRETE'", "plus_1"},
+        std::pair<std::string, std::string>{"'STONE'", "plus_2"}
+    };
+
+    std::string field_name = "enum2_field";
+    std::string bounded_seq_name = "bounded_sequence_" + field_name;
+    std::string unbounded_seq_name = "unbounded_sequence_" + field_name;
+
+    std::vector<DDSSQLFilterValueParams> inputs;
+    add_test_filtered_value_inputs("plain_field", field_name, values, inputs);
+    add_test_filtered_value_inputs("DISABLED_in_struct", "struct_field." + field_name, values, inputs);
+    add_test_filtered_value_inputs("DISABLED_array", "array_" + field_name + "[0]", values, inputs);
+    add_test_filtered_value_inputs("DISABLED_bounded_sequence", bounded_seq_name + "[0]", values, inputs);
+    add_negative_test_filtered_value_inputs("neg_bounded_sequence", bounded_seq_name + "[2]", values, inputs);
+    add_test_filtered_value_inputs("DISABLED_unbounded_sequence", unbounded_seq_name + "[0]", values, inputs);
+    add_negative_test_filtered_value_inputs("neg_unbounded_sequence", unbounded_seq_name + "[2]", values, inputs);
+    return inputs;
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    DDSSQLFilterValueTestsChar,
+    DDSSQLFilterValueTests,
+    ::testing::ValuesIn(get_test_filtered_value_char_inputs()),
+    DDSSQLFilterValueTests::PrintToStringParamName());
+
+INSTANTIATE_TEST_SUITE_P(
+    DDSSQLFilterValueTestsString,
+    DDSSQLFilterValueTests,
+    ::testing::ValuesIn(get_test_filtered_value_string_inputs()),
+    DDSSQLFilterValueTests::PrintToStringParamName());
+
+INSTANTIATE_TEST_SUITE_P(
+    DDSSQLFilterValueTestsBool,
+    DDSSQLFilterValueTests,
+    ::testing::ValuesIn(get_test_filtered_value_boolean_inputs()),
+    DDSSQLFilterValueTests::PrintToStringParamName());
+
+INSTANTIATE_TEST_SUITE_P(
+    DDSSQLFilterValueTestsUInt8,
+    DDSSQLFilterValueTests,
+    ::testing::ValuesIn(get_test_filtered_value_uint8_inputs()),
+    DDSSQLFilterValueTests::PrintToStringParamName());
+
+INSTANTIATE_TEST_SUITE_P(
+    DDSSQLFilterValueTestsUInt16,
+    DDSSQLFilterValueTests,
+    ::testing::ValuesIn(get_test_filtered_value_uint16_inputs()),
+    DDSSQLFilterValueTests::PrintToStringParamName());
+
+INSTANTIATE_TEST_SUITE_P(
+    DDSSQLFilterValueTestsUInt32,
+    DDSSQLFilterValueTests,
+    ::testing::ValuesIn(get_test_filtered_value_uint32_inputs()),
+    DDSSQLFilterValueTests::PrintToStringParamName());
+
+INSTANTIATE_TEST_SUITE_P(
+    DDSSQLFilterValueTestsUInt64,
+    DDSSQLFilterValueTests,
+    ::testing::ValuesIn(get_test_filtered_value_uint64_inputs()),
+    DDSSQLFilterValueTests::PrintToStringParamName());
+
+INSTANTIATE_TEST_SUITE_P(
+    DDSSQLFilterValueTestsInt16,
+    DDSSQLFilterValueTests,
+    ::testing::ValuesIn(get_test_filtered_value_int16_inputs()),
+    DDSSQLFilterValueTests::PrintToStringParamName());
+
+INSTANTIATE_TEST_SUITE_P(
+    DDSSQLFilterValueTestsInt32,
+    DDSSQLFilterValueTests,
+    ::testing::ValuesIn(get_test_filtered_value_int32_inputs()),
+    DDSSQLFilterValueTests::PrintToStringParamName());
+
+INSTANTIATE_TEST_SUITE_P(
+    DDSSQLFilterValueTestsInt64,
+    DDSSQLFilterValueTests,
+    ::testing::ValuesIn(get_test_filtered_value_int64_inputs()),
+    DDSSQLFilterValueTests::PrintToStringParamName());
+
+INSTANTIATE_TEST_SUITE_P(
+    DDSSQLFilterValueTestsFloat,
+    DDSSQLFilterValueTests,
+    ::testing::ValuesIn(get_test_filtered_value_float_inputs()),
+    DDSSQLFilterValueTests::PrintToStringParamName());
+
+INSTANTIATE_TEST_SUITE_P(
+    DDSSQLFilterValueTestsDouble,
+    DDSSQLFilterValueTests,
+    ::testing::ValuesIn(get_test_filtered_value_double_inputs()),
+    DDSSQLFilterValueTests::PrintToStringParamName());
+
+INSTANTIATE_TEST_SUITE_P(
+    DDSSQLFilterValueTestsLongDouble,
+    DDSSQLFilterValueTests,
+    ::testing::ValuesIn(get_test_filtered_value_long_double_inputs()),
+    DDSSQLFilterValueTests::PrintToStringParamName());
+
+INSTANTIATE_TEST_SUITE_P(
+    DDSSQLFilterValueTestsEnum,
+    DDSSQLFilterValueTests,
+    ::testing::ValuesIn(get_test_filtered_value_enum_inputs()),
+    DDSSQLFilterValueTests::PrintToStringParamName());
+
+INSTANTIATE_TEST_SUITE_P(
+    DDSSQLFilterValueTestsEnum2,
+    DDSSQLFilterValueTests,
+    ::testing::ValuesIn(get_test_filtered_value_enum2_inputs()),
+    DDSSQLFilterValueTests::PrintToStringParamName());
 
 } // namespace dds
 } // namespace fastdds

@@ -33,6 +33,15 @@ static constexpr DDSFilterValue::ValueKind effective_kind(
     return DDSFilterValue::ValueKind::ENUM == kind ? DDSFilterValue::ValueKind::SIGNED_INTEGER : kind;
 }
 
+template<typename T>
+int compare_values(
+        T lvalue,
+        T rvalue)
+{
+    return lvalue < rvalue ? -1 :
+        lvalue > rvalue ? 1 : 0;
+}
+
 /**
  * Check if a value is negative.
  * Only used during promotion to UNSIGNED_INTEGER.
@@ -194,7 +203,7 @@ void DDSFilterValue::copy_from(
     }
 }
 
-int64_t DDSFilterValue::compare(
+int DDSFilterValue::compare(
         const DDSFilterValue& lhs,
         const DDSFilterValue& rhs) noexcept
 {
@@ -210,14 +219,14 @@ int64_t DDSFilterValue::compare(
 
             case ValueKind::SIGNED_INTEGER:
             case ValueKind::ENUM:
-                return lhs.signed_integer_value - rhs.signed_integer_value;
+                return compare_values(lhs.signed_integer_value, rhs.signed_integer_value);
 
             case ValueKind::UNSIGNED_INTEGER:
-                return lhs.unsigned_integer_value - rhs.unsigned_integer_value;
+                return compare_values(lhs.unsigned_integer_value, rhs.unsigned_integer_value);
 
             case ValueKind::FLOAT:
             {
-                auto diff = lhs.float_value - rhs.float_value;
+                auto diff = static_cast<float>(lhs.float_value) - static_cast<float>(rhs.float_value);
                 auto epsilon = std::numeric_limits<float>::epsilon();
                 return diff > epsilon ? 1 :
                        diff < -epsilon ? -1 :
@@ -249,15 +258,17 @@ int64_t DDSFilterValue::compare(
 
             case ValueKind::ENUM:
             case ValueKind::SIGNED_INTEGER:
-                return lhs.signed_integer_value - to_signed_integer(rhs);
+            {
+                return compare_values(lhs.signed_integer_value, to_signed_integer(rhs));
+            }
 
             case ValueKind::UNSIGNED_INTEGER:
-                return is_negative(rhs) ? 1 : lhs.unsigned_integer_value - to_unsigned_integer(rhs);
+                return is_negative(rhs) ? 1 : compare_values(lhs.unsigned_integer_value, to_unsigned_integer(rhs));
 
             case ValueKind::FLOAT:
             {
                 auto rvalue = to_float(rhs);
-                auto diff = lhs.float_value - rvalue;
+                auto diff = static_cast<float>(lhs.float_value) - static_cast<float>(rvalue);
                 auto epsilon = std::numeric_limits<float>::epsilon();
                 return diff > epsilon ? 1 :
                        diff < -epsilon ? -1 :
