@@ -105,8 +105,8 @@ if [ -e ${mod_dir}/ros2_ws ]; then
 	# From fog-sw repo.
 	source ${mod_dir}/ros2_ws/install/setup.bash
 fi
-if [ -e ${mod_dir}/deps_ws ]; then
-	source ${mod_dir}/deps_ws/install/setup.bash
+if [ -e ${mod_dir}/../deps_ws ]; then
+	source ${mod_dir}/../deps_ws/install/setup.bash
 fi
 
 if [ -e ${mod_dir}/debian ]; then
