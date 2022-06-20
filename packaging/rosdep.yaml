@@ -1,4 +1,4 @@
 foonathan_memory_vendor:
-    ubuntu: ros-ROS_DISTRO-foonathan-memory-vendor=1.1.0*
+    ubuntu: ros-ROS_DISTRO-foonathan-memory-vendor=1.2.1*
 fastcdr:
-    ubuntu: ros-ROS_DISTRO-fastcdr=1.0.22*
+    ubuntu: ros-ROS_DISTRO-fastcdr=1.0.23*
