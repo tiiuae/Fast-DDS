@@ -2,7 +2,7 @@ name: main
 
 on:
   push:
-    branches: [ tii_build_scripts_v2.5.1 ]
+    branches: [ tii_build_2_6_2 ]
 
 jobs:
   tii-deb-build:
@@ -16,7 +16,7 @@ jobs:
         uses: actions/checkout@v2
         with:
           path: fastrtps
-          ref: tii_build_scripts_v2.5.1
+          ref: tii_build_2_6_2
 
       # Run docker build
       - name: Run fastrtps docker build
