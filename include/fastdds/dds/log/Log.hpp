@@ -36,12 +36,15 @@
 
 // Logging API:
 
+
 //! Logs an info message. Disable it through Log::SetVerbosity, define LOG_NO_INFO, or being in a release branch
 #define logInfo(cat, msg) logInfo_(cat, msg)
 //! Logs a warning. Disable reporting through Log::SetVerbosity or define LOG_NO_WARNING
 #define logWarning(cat, msg) logWarning_(cat, msg)
 //! Logs an error. Disable reporting through define LOG_NO_ERROR
 #define logError(cat, msg) logError_(cat, msg)
+
+#define logQuickPrint(msg) logQuickPrint_(msg)
 
 namespace eprosima {
 namespace fastdds {
@@ -123,6 +126,8 @@ public:
 
     // Note: In VS2013, if you're linking this class statically, you will have to call KillThread before leaving
     // main, due to an unsolved MSVC bug.
+    RTPS_DllAPI static void GetTimestamp(std::string &timestamp);
+
 
     struct Context
     {
@@ -207,6 +212,14 @@ protected:
 #if defined(WIN32)
 #define __func__ __FUNCTION__
 #endif // if defined(WIN32)
+
+#define logQuickPrint_(msg)                                                                                       \
+    {                                                                                                             \
+        using namespace eprosima::fastdds::dds;                                                                   \
+        std::string timestamp;                                                                                    \
+        Log::GetTimestamp(timestamp);                                                                             \
+        std::cout << "[ " << timestamp << "] FastDDS: " << msg << std::endl;                                     \
+    }
 
 // Name of variables inside macros must be unique, or it could produce an error with external variables
 #if !HAVE_LOG_NO_ERROR

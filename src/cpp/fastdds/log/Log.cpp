@@ -77,7 +77,6 @@ struct Resources
 
 static struct Resources resources_;
 
-
 void Log::RegisterConsumer(
         std::unique_ptr<LogConsumer>&& consumer)
 {
@@ -313,6 +312,11 @@ void Log::SetErrorStringFilter(
 {
     std::unique_lock<std::mutex> configGuard(resources_.config_mutex);
     resources_.error_string_filter.reset(new std::regex(filter));
+}
+
+void Log::GetTimestamp(std::string &timestamp)
+{
+    get_timestamp(timestamp);
 }
 
 void Log::get_timestamp(
