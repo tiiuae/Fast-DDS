@@ -108,6 +108,7 @@ void PDPSimple::initializeParticipantProxyData(
     else if (!getRTPSParticipant()->getAttributes().builtin.discovery_config.
                     use_STATIC_EndpointDiscoveryProtocol)
     {
+        logQuickPrint("ERROR: Neither EDP simple nor EDP static enabled. Endpoints will not be discovered.");
         logError(RTPS_PDP, "Neither EDP simple nor EDP static enabled. Endpoints will not be discovered.");
     }
 }
@@ -115,6 +116,8 @@ void PDPSimple::initializeParticipantProxyData(
 bool PDPSimple::init(
         RTPSParticipantImpl* part)
 {
+    //printf("PDP::initPDP\n");
+    logQuickPrint("PDPSimple::init");
     // The DATA(p) must be processed after EDP endpoint creation
     if (!PDP::initPDP(part))
     {
@@ -125,8 +128,10 @@ bool PDPSimple::init(
     if (m_discovery.discovery_config.use_STATIC_EndpointDiscoveryProtocol)
     {
         mp_EDP = new EDPStatic(this, mp_RTPSParticipant);
+        logQuickPrint("mp_EDP->initEDP(static)");
         if (!mp_EDP->initEDP(m_discovery))
         {
+            logQuickPrint("ERROR: Endpoint discovery configuration failed");
             logError(RTPS_PDP, "Endpoint discovery configuration failed");
             return false;
         }
@@ -134,14 +139,17 @@ bool PDPSimple::init(
     else if (m_discovery.discovery_config.use_SIMPLE_EndpointDiscoveryProtocol)
     {
         mp_EDP = new EDPSimple(this, mp_RTPSParticipant);
+        logQuickPrint("mp_EDP->initEDP(simple)");
         if (!mp_EDP->initEDP(m_discovery))
         {
+            logQuickPrint("ERROR: Endpoint discovery configuration failed");
             logError(RTPS_PDP, "Endpoint discovery configuration failed");
             return false;
         }
     }
     else
     {
+        logQuickPrint("WARNING: No EndpointDiscoveryProtocol defined");
         logWarning(RTPS_PDP, "No EndpointDiscoveryProtocol defined");
         return false;
     }
@@ -153,6 +161,7 @@ ParticipantProxyData* PDPSimple::createParticipantProxyData(
         const ParticipantProxyData& participant_data,
         const GUID_t&)
 {
+    logQuickPrint("PDPSimple::createParticipantProxyData");
     std::unique_lock<std::recursive_mutex> lock(*getMutex());
 
     // decide if we dismiss the participant using the ParticipantFilteringFlags
@@ -167,6 +176,7 @@ ParticipantProxyData* PDPSimple::createParticipantProxyData(
         {
             if (flags & ParticipantFilteringFlags::FILTER_DIFFERENT_HOST)
             {
+                logQuickPrint("PDPSimple::createParticipantProxyData => nullptr(1)");
                 return nullptr;
             }
         }
@@ -177,6 +187,7 @@ ParticipantProxyData* PDPSimple::createParticipantProxyData(
 
             if (filter_same && filter_different)
             {
+                logQuickPrint("PDPSimple::createParticipantProxyData => nullptr(2)");
                 return nullptr;
             }
 
@@ -184,6 +195,7 @@ ParticipantProxyData* PDPSimple::createParticipantProxyData(
 
             if ((filter_same && is_same) || (filter_different && !is_same))
             {
+                logQuickPrint("PDPSimple::createParticipantProxyData => nullptr(3)");
                 return nullptr;
             }
         }
@@ -198,12 +210,14 @@ ParticipantProxyData* PDPSimple::createParticipantProxyData(
         pdata->lease_duration_event->restart_timer();
     }
 
+    logQuickPrint("PDPSimple::createParticipantProxyData => pdata");
     return pdata;
 }
 
 // EDPStatic requires matching on ParticipantProxyData property updates
 bool PDPSimple::updateInfoMatchesEDP()
 {
+    logQuickPrint("PDPSimple::updateInfoMatchesEDP");
     return dynamic_cast<EDPStatic*>(mp_EDP) != nullptr;
 }
 
@@ -212,6 +226,7 @@ void PDPSimple::announceParticipantState(
         bool dispose,
         WriteParams& wp)
 {
+    logQuickPrint("PDPSimple::announceParticipantState");
     PDP::announceParticipantState(new_change, dispose, wp);
 
     if (!(dispose || new_change))
@@ -224,6 +239,7 @@ void PDPSimple::announceParticipantState(
         }
         else
         {
+            logQuickPrint("ERROR: Using PDPSimple protocol with a reliable writer");
             logError(RTPS_PDP, "Using PDPSimple protocol with a reliable writer");
         }
     }
@@ -232,7 +248,7 @@ void PDPSimple::announceParticipantState(
 bool PDPSimple::createPDPEndpoints()
 {
     logInfo(RTPS_PDP, "Beginning");
-
+    logQuickPrint("PDPSimple::createPDPEndpoints");
     const RTPSParticipantAllocationAttributes& allocation =
             mp_RTPSParticipant->getRTPSParticipantAttributes().allocation;
 
@@ -272,6 +288,7 @@ bool PDPSimple::createPDPEndpoints()
     }
     else
     {
+        logQuickPrint("ERROR: SimplePDP Reader creation failed");
         logError(RTPS_PDP, "SimplePDP Reader creation failed");
         delete mp_PDPReaderHistory;
         mp_PDPReaderHistory = nullptr;
@@ -332,6 +349,7 @@ bool PDPSimple::createPDPEndpoints()
     }
     else
     {
+        logQuickPrint("ERROR: SimplePDP Writer creation failed");
         logError(RTPS_PDP, "SimplePDP Writer creation failed");
         delete mp_PDPWriterHistory;
         mp_PDPWriterHistory = nullptr;
@@ -339,6 +357,7 @@ bool PDPSimple::createPDPEndpoints()
         writer_payload_pool_.reset();
         return false;
     }
+    logQuickPrint("SPDP Endpoints creation finished");
     logInfo(RTPS_PDP, "SPDP Endpoints creation finished");
     return true;
 }
@@ -346,6 +365,7 @@ bool PDPSimple::createPDPEndpoints()
 void PDPSimple::assignRemoteEndpoints(
         ParticipantProxyData* pdata)
 {
+    logQuickPrint("For RTPSParticipant: " << pdata->m_guid.guidPrefix);
     logInfo(RTPS_PDP, "For RTPSParticipant: " << pdata->m_guid.guidPrefix);
 
     const NetworkFactory& network = mp_RTPSParticipant->network_factory();
@@ -389,6 +409,7 @@ void PDPSimple::assignRemoteEndpoints(
         }
         else
         {
+            logQuickPrint("ERROR: Using PDPSimple protocol with a reliable writer");
             logError(RTPS_PDP, "Using PDPSimple protocol with a reliable writer");
         }
     }
@@ -405,6 +426,7 @@ void PDPSimple::assignRemoteEndpoints(
 void PDPSimple::removeRemoteEndpoints(
         ParticipantProxyData* pdata)
 {
+    logQuickPrint("For RTPSParticipant: " << pdata->m_guid);
     logInfo(RTPS_PDP, "For RTPSParticipant: " << pdata->m_guid);
     uint32_t endp = pdata->m_availableBuiltinEndpoints;
     uint32_t auxendp = endp;
@@ -426,6 +448,7 @@ void PDPSimple::removeRemoteEndpoints(
 void PDPSimple::notifyAboveRemoteEndpoints(
         const ParticipantProxyData& pdata)
 {
+    logQuickPrint("PDPSimple::notifyAboveRemoteEndpoints");
     //Inform EDP of new RTPSParticipant data:
     if (mp_EDP != nullptr)
     {
@@ -448,6 +471,7 @@ bool PDPSimple::newRemoteEndpointStaticallyDiscovered(
         int16_t userDefinedId,
         EndpointKind_t kind)
 {
+    logQuickPrint("PDPSimple::newRemoteEndpointStaticallyDiscovered");
     string_255 pname;
     if (lookup_participant_name(pguid, pname))
     {

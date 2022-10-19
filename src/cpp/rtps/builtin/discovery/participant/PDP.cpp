@@ -180,6 +180,7 @@ ParticipantProxyData* PDP::add_participant_proxy_data(
         const GUID_t& participant_guid,
         bool with_lease_duration)
 {
+    logQuickPrint("PDP::add_participant_proxy_data");
     ParticipantProxyData* ret_val = nullptr;
 
     // Try to take one entry from the pool
@@ -203,6 +204,8 @@ ParticipantProxyData* PDP::add_participant_proxy_data(
         }
         else
         {
+            logQuickPrint("WARNING: Maximum number of participant proxies (" << max_proxies << \
+                    ") reached for participant " << mp_RTPSParticipant->getGuid());
             logWarning(RTPS_PDP, "Maximum number of participant proxies (" << max_proxies << \
                     ") reached for participant " << mp_RTPSParticipant->getGuid() << std::endl);
             return nullptr;
@@ -229,6 +232,7 @@ ParticipantProxyData* PDP::add_participant_proxy_data(
 void PDP::initializeParticipantProxyData(
         ParticipantProxyData* participant_data)
 {
+    logQuickPrint("PDP::initializeParticipantProxyData");
     participant_data->m_leaseDuration = mp_RTPSParticipant->getAttributes().builtin.discovery_config.leaseDuration;
     //set_VendorId_eProsima(participant_data->m_VendorId);
     participant_data->m_VendorId = c_VendorId_eProsima;
@@ -360,6 +364,7 @@ void PDP::initializeParticipantProxyData(
 bool PDP::initPDP(
         RTPSParticipantImpl* part)
 {
+    logQuickPrint("initPDP - Beginning");
     logInfo(RTPS_PDP, "Beginning");
     mp_RTPSParticipant = part;
     m_discovery = mp_RTPSParticipant->getAttributes().builtin;
@@ -367,6 +372,7 @@ bool PDP::initPDP(
     //CREATE ENDPOINTS
     if (!createPDPEndpoints())
     {
+        logQuickPrint("initPDP - createPDPEndpoints => false");
         return false;
     }
     //UPDATE METATRAFFIC.
@@ -378,6 +384,7 @@ bool PDP::initPDP(
 
     if (pdata == nullptr)
     {
+        logQuickPrint("initPDP - ParticipantProxyData => nullptr");
         return false;
     }
     initializeParticipantProxyData(pdata);
@@ -403,13 +410,15 @@ bool PDP::initPDP(
                     0);
 
     set_initial_announcement_interval();
-
+    logQuickPrint("initPDP - exit => true");
     return true;
 }
 
 bool PDP::enable()
 {
-    return mp_RTPSParticipant->enableReader(mp_PDPReader);
+    bool ret = mp_RTPSParticipant->enableReader(mp_PDPReader);
+    logQuickPrint("PDP::enable => " << (int)ret);
+    return ret;
 }
 
 void PDP::announceParticipantState(
@@ -417,6 +426,7 @@ void PDP::announceParticipantState(
         bool dispose,
         WriteParams& wparams)
 {
+    logQuickPrint("Announcing RTPSParticipant State (new change: " << (int)new_change << ")");
     // logInfo(RTPS_PDP, "Announcing RTPSParticipant State (new change: " << new_change << ")");
     CacheChange_t* change = nullptr;
 
@@ -462,6 +472,7 @@ void PDP::announceParticipantState(
                 }
                 else
                 {
+                    logQuickPrint("ERROR: Cannot serialize ParticipantProxyData. (!dispose branch)");
                     logError(RTPS_PDP, "Cannot serialize ParticipantProxyData.");
                 }
             }
@@ -505,6 +516,7 @@ void PDP::announceParticipantState(
             }
             else
             {
+                logQuickPrint("ERROR: Cannot serialize ParticipantProxyData.");
                 logError(RTPS_PDP, "Cannot serialize ParticipantProxyData.");
             }
         }
@@ -514,26 +526,32 @@ void PDP::announceParticipantState(
 
 void PDP::stopParticipantAnnouncement()
 {
+    logQuickPrint("PDP::stopParticipantAnnouncement");
     resend_participant_info_event_->cancel_timer();
 }
 
 void PDP::resetParticipantAnnouncement()
 {
+    logQuickPrint("PDP::resetParticipantAnnouncement");
     resend_participant_info_event_->restart_timer();
 }
 
 bool PDP::has_reader_proxy_data(
         const GUID_t& reader)
 {
+    logQuickPrint("PDP::has_reader_proxy_data");
     std::lock_guard<std::recursive_mutex> guardPDP(*this->mp_mutex);
     for (ParticipantProxyData* pit : participant_proxies_)
     {
         if (pit->m_guid.guidPrefix == reader.guidPrefix)
         {
             ProxyHashTable<ReaderProxyData>& readers = *pit->m_readers;
-            return readers.find(reader.entityId) != readers.end();
+            bool ret = readers.find(reader.entityId) != readers.end();
+            logQuickPrint("PDP::has_reader_proxy_data => " << (int)ret);
+            return ret;
         }
     }
+    logQuickPrint("PDP::has_reader_proxy_data => FALSE");
     return false;
 }
 
@@ -541,6 +559,7 @@ bool PDP::lookupReaderProxyData(
         const GUID_t& reader,
         ReaderProxyData& rdata)
 {
+    logQuickPrint("PDP::lookupReaderProxyData");
     std::lock_guard<std::recursive_mutex> guardPDP(*this->mp_mutex);
     for (ParticipantProxyData* pit : participant_proxies_)
     {
@@ -550,25 +569,31 @@ bool PDP::lookupReaderProxyData(
             if (rit != pit->m_readers->end())
             {
                 rdata.copy(rit->second);
+                logQuickPrint("PDP::lookupReaderProxyData => TRUE");
                 return true;
             }
         }
     }
+    logQuickPrint("PDP::lookupReaderProxyData => FALSE");
     return false;
 }
 
 bool PDP::has_writer_proxy_data(
         const GUID_t& writer)
 {
+    logQuickPrint("PDP::has_writer_proxy_data");
     std::lock_guard<std::recursive_mutex> guardPDP(*this->mp_mutex);
     for (ParticipantProxyData* pit : participant_proxies_)
     {
         if (pit->m_guid.guidPrefix == writer.guidPrefix)
         {
             ProxyHashTable<WriterProxyData>& writers = *pit->m_writers;
-            return writers.find(writer.entityId) != writers.end();
+            bool ret = writers.find(writer.entityId) != writers.end();
+            logQuickPrint("PDP::has_writer_proxy_data => " << (int)ret);
+            return ret;
         }
     }
+    logQuickPrint("PDP::has_writer_proxy_data => FALSE");
     return false;
 }
 
@@ -576,6 +601,7 @@ bool PDP::lookupWriterProxyData(
         const GUID_t& writer,
         WriterProxyData& wdata)
 {
+    logQuickPrint("PDP::lookupWriterProxyData");
     std::lock_guard<std::recursive_mutex> guardPDP(*this->mp_mutex);
     for (ParticipantProxyData* pit : participant_proxies_)
     {
@@ -585,16 +611,19 @@ bool PDP::lookupWriterProxyData(
             if ( wit != pit->m_writers->end())
             {
                 wdata.copy(wit->second);
+                logQuickPrint("PDP::lookupWriterProxyData => TRUE");
                 return true;
             }
         }
     }
+    logQuickPrint("PDP::lookupWriterProxyData => FALSE");
     return false;
 }
 
 bool PDP::removeReaderProxyData(
         const GUID_t& reader_guid)
 {
+    logQuickPrint("PDP::removeReaderProxyData");
     logInfo(RTPS_PDP, "Removing reader proxy data " << reader_guid);
     std::lock_guard<std::recursive_mutex> guardPDP(*this->mp_mutex);
 
@@ -621,17 +650,19 @@ bool PDP::removeReaderProxyData(
                 pR->clear();
                 pit->m_readers->erase(rit);
                 reader_proxies_pool_.push_back(pR);
+                logQuickPrint("PDP::removeReaderProxyData => TRUE");
                 return true;
             }
         }
     }
-
+    logQuickPrint("PDP::removeReaderProxyData => FALSE");
     return false;
 }
 
 bool PDP::removeWriterProxyData(
         const GUID_t& writer_guid)
 {
+    logQuickPrint("PDP::removeWriterProxyData");
     logInfo(RTPS_PDP, "Removing writer proxy data " << writer_guid);
     std::lock_guard<std::recursive_mutex> guardPDP(*this->mp_mutex);
 
@@ -658,12 +689,12 @@ bool PDP::removeWriterProxyData(
                 pW->clear();
                 pit->m_writers->erase(wit);
                 writer_proxies_pool_.push_back(pW);
-
+                logQuickPrint("PDP::removeWriterProxyData => FALSE");
                 return true;
             }
         }
     }
-
+    logQuickPrint("PDP::removeWriterProxyData => TRUE");
     return false;
 }
 
@@ -671,15 +702,18 @@ bool PDP::lookup_participant_name(
         const GUID_t& guid,
         string_255& name)
 {
+    logQuickPrint("PDP::lookup_participant_name");
     std::lock_guard<std::recursive_mutex> guardPDP(*this->mp_mutex);
     for (ParticipantProxyData* pit : participant_proxies_)
     {
         if (pit->m_guid == guid)
         {
             name = pit->m_participantName;
+            logQuickPrint("PDP::lookup_participant_name => TRUE");
             return true;
         }
     }
+    logQuickPrint("PDP::lookup_participant_name => FALSE");
     return false;
 }
 
@@ -687,15 +721,18 @@ bool PDP::lookup_participant_key(
         const GUID_t& participant_guid,
         InstanceHandle_t& key)
 {
+    logQuickPrint("PDP::lookup_participant_key");
     std::lock_guard<std::recursive_mutex> guardPDP(*this->mp_mutex);
     for (ParticipantProxyData* pit : participant_proxies_)
     {
         if (pit->m_guid == participant_guid)
         {
             key = pit->m_key;
+            logQuickPrint("PDP::lookup_participant_key => TRUE");
             return true;
         }
     }
+    logQuickPrint("PDP::lookup_participant_key => FALSE");
     return false;
 }
 
@@ -704,6 +741,7 @@ ReaderProxyData* PDP::addReaderProxyData(
         GUID_t& participant_guid,
         std::function<bool(ReaderProxyData*, bool, const ParticipantProxyData&)> initializer_func)
 {
+    logQuickPrint("PDP::addReaderProxyData: " << reader_guid);
     logInfo(RTPS_PDP, "Adding reader proxy data " << reader_guid);
     ReaderProxyData* ret_val = nullptr;
 
@@ -728,6 +766,7 @@ ReaderProxyData* PDP::addReaderProxyData(
 
                 if (!initializer_func(ret_val, true, *pit))
                 {
+                    logQuickPrint("PDP::addReaderProxyData => nullptr(1)");
                     return nullptr;
                 }
 
@@ -739,7 +778,7 @@ ReaderProxyData* PDP::addReaderProxyData(
                     listener->onReaderDiscovery(mp_RTPSParticipant->getUserRTPSParticipant(), std::move(info));
                     check_and_notify_type_discovery(listener, *ret_val);
                 }
-
+                logQuickPrint("PDP::addReaderProxyData => ret_val(1)");
                 return ret_val;
             }
 
@@ -758,6 +797,8 @@ ReaderProxyData* PDP::addReaderProxyData(
                 }
                 else
                 {
+                    logQuickPrint("WARNING: Maximum number of reader proxies (" << max_proxies <<
+                            ") reached for participant " << mp_RTPSParticipant->getGuid());
                     logWarning(RTPS_PDP, "Maximum number of reader proxies (" << max_proxies <<
                             ") reached for participant " << mp_RTPSParticipant->getGuid() << std::endl);
                     return nullptr;
@@ -775,6 +816,7 @@ ReaderProxyData* PDP::addReaderProxyData(
 
             if (!initializer_func(ret_val, false, *pit))
             {
+                logQuickPrint("PDP::addReaderProxyData => nullptr(2)");
                 return nullptr;
             }
 
@@ -786,11 +828,11 @@ ReaderProxyData* PDP::addReaderProxyData(
                 listener->onReaderDiscovery(mp_RTPSParticipant->getUserRTPSParticipant(), std::move(info));
                 check_and_notify_type_discovery(listener, *ret_val);
             }
-
+            logQuickPrint("PDP::addReaderProxyData => ret_val(2)");
             return ret_val;
         }
     }
-
+    logQuickPrint("PDP::addReaderProxyData => nullptr(3)");
     return nullptr;
 }
 
@@ -799,6 +841,7 @@ WriterProxyData* PDP::addWriterProxyData(
         GUID_t& participant_guid,
         std::function<bool(WriterProxyData*, bool, const ParticipantProxyData&)> initializer_func)
 {
+    logQuickPrint("PDP::addWriterProxyData: " << writer_guid);
     logInfo(RTPS_PDP, "Adding writer proxy data " << writer_guid);
     WriterProxyData* ret_val = nullptr;
 
@@ -823,6 +866,7 @@ WriterProxyData* PDP::addWriterProxyData(
 
                 if (!initializer_func(ret_val, true, *pit))
                 {
+                    logQuickPrint("PDP::addWriterProxyData => nullptr(1) ");
                     return nullptr;
                 }
 
@@ -834,7 +878,7 @@ WriterProxyData* PDP::addWriterProxyData(
                     listener->onWriterDiscovery(mp_RTPSParticipant->getUserRTPSParticipant(), std::move(info));
                     check_and_notify_type_discovery(listener, *ret_val);
                 }
-
+                logQuickPrint("PDP::addWriterProxyData => ret_val(1) ");
                 return ret_val;
             }
 
@@ -853,6 +897,8 @@ WriterProxyData* PDP::addWriterProxyData(
                 }
                 else
                 {
+                    logQuickPrint("WARNING: Maximum number of writer proxies (" << max_proxies <<
+                            ") reached for participant " << mp_RTPSParticipant->getGuid());
                     logWarning(RTPS_PDP, "Maximum number of writer proxies (" << max_proxies <<
                             ") reached for participant " << mp_RTPSParticipant->getGuid() << std::endl);
                     return nullptr;
@@ -870,6 +916,7 @@ WriterProxyData* PDP::addWriterProxyData(
 
             if (!initializer_func(ret_val, false, *pit))
             {
+                logQuickPrint("PDP::addWriterProxyData => nullptr(2) ");
                 return nullptr;
             }
 
@@ -881,11 +928,11 @@ WriterProxyData* PDP::addWriterProxyData(
                 listener->onWriterDiscovery(mp_RTPSParticipant->getUserRTPSParticipant(), std::move(info));
                 check_and_notify_type_discovery(listener, *ret_val);
             }
-
+            logQuickPrint("PDP::addWriterProxyData => ret_val(2) ");
             return ret_val;
         }
     }
-
+    logQuickPrint("PDP::addWriterProxyData => nullptr(3) ");
     return nullptr;
 }
 
@@ -893,9 +940,11 @@ bool PDP::remove_remote_participant(
         const GUID_t& partGUID,
         ParticipantDiscoveryInfo::DISCOVERY_STATUS reason)
 {
+    logQuickPrint("PDP::remove_remote_participant");
     if (partGUID == getLocalParticipantProxyData()->m_guid)
     {
         // avoid removing our own data
+        logQuickPrint("PDP::remove_remote_participant => FALSE");
         return false;
     }
 
@@ -1022,9 +1071,10 @@ bool PDP::remove_remote_participant(
         participant_proxies_pool_.push_back(pdata);
 
         this->mp_mutex->unlock();
+        logQuickPrint("PDP::remove_remote_participant => TRUE");
         return true;
     }
-
+    logQuickPrint("PDP::remove_remote_participant => FALSE (2)");
     return false;
 }
 
@@ -1036,6 +1086,7 @@ const BuiltinAttributes& PDP::builtin_attributes() const
 void PDP::assert_remote_participant_liveliness(
         const GuidPrefix_t& remote_guid)
 {
+    logQuickPrint("PDP::assert_remote_participant_liveliness");
     std::lock_guard<std::recursive_mutex> guardPDP(*this->mp_mutex);
 
     for (ParticipantProxyData* it : this->participant_proxies_)
@@ -1053,6 +1104,7 @@ void PDP::assert_remote_participant_liveliness(
 CDRMessage_t PDP::get_participant_proxy_data_serialized(
         Endianness_t endian)
 {
+    logQuickPrint("PDP::get_participant_proxy_data_serialized");
     std::lock_guard<std::recursive_mutex> guardPDP(*this->mp_mutex);
     CDRMessage_t cdr_msg(RTPSMESSAGE_DEFAULT_SIZE);
     cdr_msg.msg_endian = endian;
@@ -1069,6 +1121,7 @@ CDRMessage_t PDP::get_participant_proxy_data_serialized(
 ParticipantProxyData* PDP::get_participant_proxy_data(
         const GuidPrefix_t& guid_prefix)
 {
+    logQuickPrint("PDP::get_participant_proxy_data");
     for (auto pit = ParticipantProxiesBegin(); pit != ParticipantProxiesEnd(); ++pit)
     {
         if (guid_prefix == (*pit)->m_guid.guidPrefix)
@@ -1081,6 +1134,7 @@ ParticipantProxyData* PDP::get_participant_proxy_data(
 
 std::list<eprosima::fastdds::rtps::RemoteServerAttributes>& PDP::remote_server_attributes()
 {
+    logQuickPrint("PDP::remote_server_attributes");
     std::unique_lock<std::recursive_mutex> lock(*getMutex());
     return mp_builtin->m_DiscoveryServers;
 }
@@ -1088,6 +1142,7 @@ std::list<eprosima::fastdds::rtps::RemoteServerAttributes>& PDP::remote_server_a
 void PDP::check_remote_participant_liveliness(
         ParticipantProxyData* remote_participant)
 {
+    logQuickPrint("PDP::check_remote_participant_liveliness");
     std::unique_lock<std::recursive_mutex> guard(*this->mp_mutex);
 
     if (remote_participant->should_check_lease_duration)
