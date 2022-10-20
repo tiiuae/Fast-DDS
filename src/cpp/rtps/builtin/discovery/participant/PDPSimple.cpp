@@ -208,9 +208,11 @@ ParticipantProxyData* PDPSimple::createParticipantProxyData(
         pdata->isAlive = true;
         pdata->lease_duration_event->update_interval(pdata->m_leaseDuration);
         pdata->lease_duration_event->restart_timer();
+        logQuickPrint("PDPSimple::createParticipantProxyData => name: '" << pdata->m_participantName.to_string() << "', leaseDuration: " << pdata->m_leaseDuration.seconds);
+    } else {
+        logQuickPrint("PDPSimple::createParticipantProxyData => nullptr");
     }
 
-    logQuickPrint("PDPSimple::createParticipantProxyData => pdata");
     return pdata;
 }
 
