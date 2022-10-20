@@ -767,7 +767,11 @@ ReaderProxyData* PDP::addReaderProxyData(
                     listener->onReaderDiscovery(mp_RTPSParticipant->getUserRTPSParticipant(), std::move(info));
                     check_and_notify_type_discovery(listener, *ret_val);
                 }
-                logQuickPrint("PDP::addReaderProxyData => ret_val(1)");
+
+                {
+                    string_255 tname = ret_val->topicName();
+                    logQuickPrint("PDP::addReaderProxyData => ret_val(1) topic: " << tname.to_string() );
+                }
                 return ret_val;
             }
 
@@ -817,7 +821,11 @@ ReaderProxyData* PDP::addReaderProxyData(
                 listener->onReaderDiscovery(mp_RTPSParticipant->getUserRTPSParticipant(), std::move(info));
                 check_and_notify_type_discovery(listener, *ret_val);
             }
-            logQuickPrint("PDP::addReaderProxyData => ret_val(2)");
+
+            {
+                string_255 tname = ret_val->topicName();
+                logQuickPrint("PDP::addReaderProxyData => ret_val(2) topic: " << tname.to_string() );
+            }
             return ret_val;
         }
     }
@@ -867,6 +875,11 @@ WriterProxyData* PDP::addWriterProxyData(
                     listener->onWriterDiscovery(mp_RTPSParticipant->getUserRTPSParticipant(), std::move(info));
                     check_and_notify_type_discovery(listener, *ret_val);
                 }
+
+                {
+                    string_255 tname = ret_val->topicName();
+                    logQuickPrint("PDP::addWriterProxyData => ret_val(1) topic: " << tname.to_string() );
+                }
                 return ret_val;
             }
 
@@ -915,6 +928,11 @@ WriterProxyData* PDP::addWriterProxyData(
                 info.status = WriterDiscoveryInfo::DISCOVERED_WRITER;
                 listener->onWriterDiscovery(mp_RTPSParticipant->getUserRTPSParticipant(), std::move(info));
                 check_and_notify_type_discovery(listener, *ret_val);
+            }
+
+            {
+                string_255 tname = ret_val->topicName();
+                logQuickPrint("PDP::addWriterProxyData => ret_val(2) topic: " << tname.to_string() );
             }
             return ret_val;
         }
