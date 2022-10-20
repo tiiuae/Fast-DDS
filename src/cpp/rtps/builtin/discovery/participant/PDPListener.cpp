@@ -55,6 +55,7 @@ void PDPListener::onNewCacheChangeAdded(
 {
     CacheChange_t* change = const_cast<CacheChange_t*>(change_in);
     GUID_t writer_guid = change->writerGUID;
+    logQuickPrint("SPDP Message received from: " << change_in->writerGUID);
     logInfo(RTPS_PDP, "SPDP Message received from: " << change_in->writerGUID);
 
     // Make sure we have an instance handle (i.e GUID)
@@ -62,6 +63,7 @@ void PDPListener::onNewCacheChangeAdded(
     {
         if (!this->get_key(change))
         {
+            logQuickPrint("PDPListener: WARNING: Problem getting the key of the change, removing");
             logWarning(RTPS_PDP, "Problem getting the key of the change, removing");
             parent_pdp_->mp_PDPReaderHistory->remove_change(change);
             return;
@@ -77,6 +79,7 @@ void PDPListener::onNewCacheChangeAdded(
         // Ignore announcement from own RTPSParticipant
         if (guid == parent_pdp_->getRTPSParticipant()->getGuid())
         {
+            logQuickPrint("PDPListener: Message from own RTPSParticipant, removing");
             logInfo(RTPS_PDP, "Message from own RTPSParticipant, removing");
             parent_pdp_->mp_PDPReaderHistory->remove_change(change);
             return;
@@ -92,6 +95,7 @@ void PDPListener::onNewCacheChangeAdded(
         // If change is not consistent, it will be processed on the thread that has overriten it
         if ((ALIVE != change->kind) || (seq_num != change->sequenceNumber) || (writer_guid != change->writerGUID))
         {
+            logQuickPrint("PDPListener: Change not consistent..");
             return;
         }
 
@@ -131,6 +135,11 @@ void PDPListener::onNewCacheChangeAdded(
 
                 if (pdata != nullptr)
                 {
+                    logQuickPrint("PDPListener: New participant "
+                            << pdata->m_guid << " at "
+                            << "MTTLoc: " << pdata->metatraffic_locators
+                            << " DefLoc:" << pdata->default_locators);
+
                     logInfo(RTPS_PDP_DISCOVERY, "New participant "
                             << pdata->m_guid << " at "
                             << "MTTLoc: " << pdata->metatraffic_locators
@@ -155,6 +164,10 @@ void PDPListener::onNewCacheChangeAdded(
                 pdata->isAlive = true;
                 reader->getMutex().unlock();
 
+                logQuickPrint("PDPListener: Update participant "
+                        << pdata->m_guid << " at "
+                        << "MTTLoc: " << pdata->metatraffic_locators
+                        << " DefLoc:" << pdata->default_locators);
                 logInfo(RTPS_PDP_DISCOVERY, "Update participant "
                         << pdata->m_guid << " at "
                         << "MTTLoc: " << pdata->metatraffic_locators
@@ -189,6 +202,7 @@ void PDPListener::onNewCacheChangeAdded(
     }
     else
     {
+        logQuickPrint("PDPListener: Not alive, remove participant");
         reader->getMutex().unlock();
         if (parent_pdp_->remove_remote_participant(guid, ParticipantDiscoveryInfo::REMOVED_PARTICIPANT))
         {
