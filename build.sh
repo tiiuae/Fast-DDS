@@ -8,7 +8,8 @@ git_commit_hash=${2:-$(git rev-parse HEAD)}
 
 git_version_string=${3:-$(git log --date=format:%Y%m%d --pretty=~git%cd.%h -n 1)}
 
-build_number=${GITHUB_RUN_NUMBER:=0}
+# Add this special build to the name of the package. This is not nice. :(
+build_number="${GITHUB_RUN_NUMBER:=0}-deadlock-fix"
 
 ros_distro=${ROS_DISTRO:=galactic}
 
